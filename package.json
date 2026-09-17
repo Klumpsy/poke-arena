@@ -1,0 +1,11 @@
+{
+  "name": "poke-arena",
+  "private": true,
+  "workspaces": ["engine", "web"],
+  "scripts": {
+    "test": "npm run test -w engine",
+    "build": "npm run build -w web",
+    "dev": "npm run dev -w web",
+    "fetch-data": "node data/fetch.mjs"
+  }
+}
