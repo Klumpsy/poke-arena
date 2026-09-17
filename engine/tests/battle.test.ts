@@ -211,6 +211,27 @@ describe('KO, replace and win', () => {
   });
 });
 
+describe('switching mid-battle', () => {
+  it('lets a side switch before moves are executed and lists switches as legal actions', () => {
+    const s = createBattle(team(charizard, gengar), team(snorlax), 21);
+    expect(legalActions(s, 'a')).toContainEqual({ type: 'switch', slot: 1 });
+    expect(legalActions(s, 'a')).not.toContainEqual({ type: 'switch', slot: 0 });
+    const r = applyActions(s, { a: { type: 'switch', slot: 1 }, b: { type: 'move', moveIndex: 0 } });
+    expect(r.state.sides.a.active).toBe(1);
+    const kinds = r.events.map((e) => e.type);
+    expect(kinds.indexOf('switch')).toBeLessThan(kinds.indexOf('move'));
+    const dmg = r.events.find((e) => e.type === 'damage' && e.side === 'a');
+    if (dmg?.type !== 'damage') throw new Error('expected tackle to hit the switched-in Gengar');
+    expect(dmg.name).toBe('Gengar');
+    expect(dmg.effectiveness).toBe(0);
+  });
+
+  it('rejects switching to a fainted or active slot', () => {
+    const s = createBattle(team(charizard, gengar), team(snorlax), 21);
+    expect(() => applyActions(s, { a: { type: 'switch', slot: 0 }, b: { type: 'move', moveIndex: 0 } })).toThrow(/Illegal switch/);
+  });
+});
+
 describe('replay', () => {
   it('rebuilds identical state from the action log', () => {
     const turns = [

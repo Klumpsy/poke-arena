@@ -54,6 +54,15 @@ npm test                       # engine tests
 ```
 
 
+## Gyms, badges, stakes (v2)
+
+- Elo rating (start 1000) ranks players. 8 typed gyms, king of the hill: beat the leader in a gym challenge for
+  a permanent badge and the gym itself. Empty gyms go to the highest-rated player without one (their team must
+  include the gym type). Losing a gym challenge means a 24h cooldown for that gym.
+- Challenges can carry a stake (free text). The loser owes it; it stays listed under "Inzetten" until settled.
+- Pending challenges expire after 3 minutes, players can forfeit, and an abandoned battle (opponent offline for
+  2 minutes) can be claimed, so nobody gets stuck.
+
 ## How a battle works
 
 1. Both players save a team (1 to 3 Pokémon) in the lobby. Per Pokémon you can pick 4 moves from everything

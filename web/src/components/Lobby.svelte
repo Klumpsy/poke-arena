@@ -1,7 +1,11 @@
 <script lang="ts">
   import { store } from '../lib/store.svelte';
+  import ChallengeModal from './ChallengeModal.svelte';
+  import DebtsTab from './DebtsTab.svelte';
+  import GymsTab from './GymsTab.svelte';
   import Leaderboard from './Leaderboard.svelte';
   import MovePicker from './MovePicker.svelte';
+  import PokedexTab from './PokedexTab.svelte';
   import OnlineList from './OnlineList.svelte';
   import PokemonCard from './PokemonCard.svelte';
 
@@ -12,6 +16,9 @@
 
   const dirty = $derived(draft.join() !== store.team.join());
   let editing = $state<string | null>(null);
+  let challenging = $state<string | null>(null);
+  let tab = $state<'arena' | 'gyms' | 'pokedex' | 'debts'>('arena');
+  const openDebts = $derived(store.debts.filter((d) => !d.done_at && (d.debtor_id === store.me || d.creditor_id === store.me)).length);
   const editingPokemon = $derived(store.pokemon.find((p) => p.id === editing) ?? null);
 
   function toggle(id: string) {
@@ -20,6 +27,20 @@
   }
 </script>
 
+<nav class="tabs">
+  <button class:on={tab === 'arena'} onclick={() => (tab = 'arena')}>Arena</button>
+  <button class:on={tab === 'gyms'} onclick={() => (tab = 'gyms')}>Gyms</button>
+  <button class:on={tab === 'pokedex'} onclick={() => (tab = 'pokedex')}>Pokédex</button>
+  <button class:on={tab === 'debts'} onclick={() => (tab = 'debts')}>Inzetten{#if openDebts} <span class="count">{openDebts}</span>{/if}</button>
+</nav>
+
+{#if tab === 'gyms'}
+  <GymsTab />
+{:else if tab === 'pokedex'}
+  <PokedexTab />
+{:else if tab === 'debts'}
+  <DebtsTab />
+{:else}
 <div class="grid lobby">
   <section class="panel">
     <div class="row" style="margin-bottom: 0.75rem">
@@ -41,10 +62,15 @@
     </p>
   </section>
   <aside class="grid">
-    <OnlineList />
+    <OnlineList onChallenge={(id) => (challenging = id)} />
     <Leaderboard />
   </aside>
 </div>
+{/if}
+
+{#if challenging}
+  <ChallengeModal opponentId={challenging} onclose={() => (challenging = null)} />
+{/if}
 
 {#if editingPokemon}
   <MovePicker pokemon={editingPokemon} onclose={() => (editing = null)} />
@@ -56,6 +82,8 @@
     <div class="panel modal">
       <h2 class="pixel" style="font-size: 1rem">Uitdaging!</h2>
       <p><strong>{store.nameOf(invite.challenger_id)}</strong> wil tegen je vechten.</p>
+      {#if invite.gym_id}<p><span class="badge active">Gym-uitdaging</span> voor {store.gyms.find((g) => g.id === invite.gym_id)?.name ?? invite.gym_id}. Win je, dan blijf je leader.</p>{/if}
+      {#if invite.stake}<p>Inzet: <strong>"{invite.stake}"</strong>. Accepteren = akkoord.</p>{/if}
       {#if !store.team.length}<p class="error">Sla eerst een team op om te kunnen accepteren.</p>{/if}
       <div class="row">
         <button class="primary" disabled={!store.team.length} onclick={() => store.respond(invite.id, true)}>Accepteren</button>
@@ -66,6 +94,9 @@
 {/if}
 
 <style>
+  .tabs { display: flex; gap: 0.4rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  .tabs button.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 700; }
+  .count { background: var(--danger); color: #fff; border-radius: 999px; padding: 0 0.4rem; font-size: 0.7rem; }
   .cards { display: grid; gap: 0.75rem; }
   .modal-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); display: grid; place-items: center; z-index: 10; }
   .modal { max-width: 420px; width: calc(100% - 2rem); }

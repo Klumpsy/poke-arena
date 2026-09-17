@@ -1,4 +1,4 @@
-import { createBattle, defaultMoves, hasDamagingMove, learnableMoves } from '../src';
+import { createBattle, defaultMoves, hasDamagingMove, learnableMoves, moveEffectiveness } from '../src';
 import { mon, team } from './helpers';
 
 describe('learnableMoves', () => {
@@ -30,5 +30,13 @@ describe('defaultMoves', () => {
     const s = createBattle(team(mon(354, [], { level: 100 })), team(mon(531, [])), 1);
     expect(s.sides.a.team[0].moves.map((m) => m.slug)).toEqual(defaultMoves(354, 100));
     expect(s.sides.a.team[0].moves[0].slug).not.toBe('struggle');
+  });
+});
+
+describe('moveEffectiveness', () => {
+  it('returns the multiplier for damaging moves and null for status moves', () => {
+    expect(moveEffectiveness('flamethrower', ['grass', 'poison'])).toBe(2);
+    expect(moveEffectiveness('tackle', ['ghost'])).toBe(0);
+    expect(moveEffectiveness('growl', ['normal'])).toBeNull();
   });
 });

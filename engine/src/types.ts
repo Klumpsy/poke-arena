@@ -70,7 +70,7 @@ export type Action = { type: 'move'; moveIndex: number } | { type: 'switch'; slo
 export type BattleEvent =
   | { type: 'turn'; turn: number }
   | { type: 'switch'; side: Side; slot: number; name: string }
-  | { type: 'move'; side: Side; name: string; move: string }
+  | { type: 'move'; side: Side; name: string; move: string; slug: string; moveType: string; category: 'physical' | 'special' | 'status' }
   | { type: 'miss'; side: Side; name: string }
   | { type: 'fail'; side: Side; name: string }
   | { type: 'damage'; side: Side; name: string; amount: number; hp: number; maxHp: number; effectiveness: number; crit: boolean }

@@ -1,12 +1,13 @@
 <script lang="ts">
   import { store } from '../lib/store.svelte';
+  let { onChallenge }: { onChallenge: (id: string) => void } = $props();
 </script>
 
 <section class="panel">
   <h2>Online</h2>
   {#if store.outgoing}
     <p class="muted" style="animation: pulse 1.5s infinite">
-      Wacht op {store.nameOf(store.outgoing.opponent_id)}...
+      Wacht op {store.nameOf(store.outgoing.opponent_id)}... <span style="font-size: 0.8rem">(verloopt na 3 min)</span>
       <button style="margin-left: 0.5rem" onclick={() => store.cancelChallenge()}>Annuleer</button>
     </p>
   {/if}
@@ -22,7 +23,8 @@
           {#if p.inBattle}
             <span class="badge">in gevecht</span>
           {:else}
-            <button class="primary" disabled={!store.team.length || Boolean(store.outgoing)} onclick={() => store.challenge(p.id)}>Uitdagen</button>
+            {#if store.gymOf(p.id)}<span class="badge" title="Gymleader">leader</span>{/if}
+            <button class="primary" disabled={!store.team.length || Boolean(store.outgoing)} onclick={() => onChallenge(p.id)}>Uitdagen</button>
           {/if}
         </li>
       {/each}

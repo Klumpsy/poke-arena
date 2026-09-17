@@ -1,6 +1,6 @@
 import type { RealtimeChannel, Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
-import type { BattleRow, PlayerRow, PokemonRow, PresenceMeta, TeamRow } from './types';
+import type { BadgeRow, BattleRow, CooldownRow, DebtRow, GymRow, PlayerRow, PokemonRow, PresenceMeta, TeamRow } from './types';
 
 class ArenaStore {
   session = $state<Session | null>(null);
@@ -15,6 +15,12 @@ class ArenaStore {
   outgoing = $state<BattleRow | null>(null);
   activeBattle = $state<BattleRow | null>(null);
   error = $state<string | null>(null);
+  gyms = $state<GymRow[]>([]);
+  badges = $state<BadgeRow[]>([]);
+  cooldowns = $state<CooldownRow[]>([]);
+  debts = $state<DebtRow[]>([]);
+  allPokemon = $state<PokemonRow[]>([]);
+  nextClaimant = $state<string | null>(null);
 
   private lobby: RealtimeChannel | null = null;
   private battlesChannel: RealtimeChannel | null = null;
@@ -44,12 +50,16 @@ class ArenaStore {
       await this.signOut();
       return;
     }
-    await Promise.all([this.loadPokemon(), this.loadTeam(), this.loadPlayers(), this.loadBattles(), this.loadSyncToken()]);
+    await Promise.all([this.loadPokemon(), this.loadTeam(), this.loadPlayers(), this.loadBattles(), this.loadSyncToken(), this.loadArena()]);
+    void supabase.rpc('heartbeat');
     this.subscribe();
     this.pollTimer = setInterval(() => {
       void this.loadPokemon();
+      void this.loadTeam();
       void this.loadBattles();
       void this.loadPlayers();
+      void this.loadArena();
+      void supabase.rpc('heartbeat');
     }, 15000);
   }
 
@@ -147,14 +157,65 @@ class ArenaStore {
     await this.trackPresence();
   }
 
+  async loadArena(): Promise<void> {
+    const [gyms, badges, cooldowns, debts, all, next] = await Promise.all([
+      supabase.from('gyms').select('*').order('sort'),
+      supabase.from('badges').select('*'),
+      supabase.from('gym_cooldowns').select('*').gt('until', new Date().toISOString()),
+      supabase.from('debts').select('*').order('created_at', { ascending: false }).limit(100),
+      supabase.from('pokemon').select('*').order('level', { ascending: false }),
+      supabase.rpc('next_claimant'),
+    ]);
+    this.gyms = (gyms.data as GymRow[] | null) ?? [];
+    this.badges = (badges.data as BadgeRow[] | null) ?? [];
+    this.cooldowns = (cooldowns.data as CooldownRow[] | null) ?? [];
+    this.debts = (debts.data as DebtRow[] | null) ?? [];
+    this.allPokemon = (all.data as PokemonRow[] | null) ?? [];
+    this.nextClaimant = (next.data as string | null) ?? null;
+  }
+
+  badgesOf(playerId: string): BadgeRow[] {
+    return this.badges.filter((b) => b.player_id === playerId);
+  }
+
+  gymOf(playerId: string): GymRow | undefined {
+    return this.gyms.find((g) => g.leader_id === playerId);
+  }
+
+  cooldownFor(gymId: string): CooldownRow | undefined {
+    return this.cooldowns.find((c) => c.gym_id === gymId && c.player_id === this.me);
+  }
+
+  async claimGym(gymId: string): Promise<void> {
+    this.error = null;
+    const { error } = await supabase.rpc('claim_gym', { p_gym: gymId });
+    if (error) this.error = error.message;
+    await this.loadArena();
+  }
+
+  async releaseGym(): Promise<void> {
+    this.error = null;
+    const { error } = await supabase.rpc('release_gym');
+    if (error) this.error = error.message;
+    await this.loadArena();
+  }
+
+  async settleDebt(debtId: string): Promise<void> {
+    this.error = null;
+    const { error } = await supabase.rpc('settle_debt', { p_debt: debtId });
+    if (error) this.error = error.message;
+    await this.loadArena();
+  }
+
   async loadPlayers(): Promise<void> {
-    const { data } = await supabase.from('players').select('*').order('wins', { ascending: false }).order('losses', { ascending: true }).order('name');
+    const { data } = await supabase.from('players').select('*').order('rating', { ascending: false }).order('wins', { ascending: false }).order('name');
     this.players = (data as PlayerRow[] | null) ?? [];
     if (this.me) this.player = this.players.find((p) => p.id === this.me) ?? this.player;
   }
 
   async loadBattles(): Promise<void> {
     if (!this.me) return;
+    void supabase.rpc('tidy_battles');
     const { data } = await supabase
       .from('battles')
       .select('*')
@@ -166,7 +227,8 @@ class ArenaStore {
     const active = rows.find((b) => b.status === 'active') ?? null;
     const current = this.activeBattle ? rows.find((b) => b.id === this.activeBattle!.id) : null;
     this.activeBattle = active ?? (current?.status === 'finished' ? current : null);
-    this.incoming = rows.filter((b) => b.status === 'pending' && b.opponent_id === this.me);
+    const fresh = Date.now() - 3 * 60 * 1000;
+    this.incoming = rows.filter((b) => b.status === 'pending' && b.opponent_id === this.me && new Date(b.created_at).getTime() > fresh);
     const out = rows.find((b) => b.status === 'pending' && b.challenger_id === this.me) ?? null;
     const declined = rows.find((b) => b.status === 'declined' && b.challenger_id === this.me && this.outgoing?.id === b.id);
     if (declined) this.error = `${this.nameOf(declined.opponent_id)} heeft je uitdaging afgewezen.`;
@@ -178,16 +240,13 @@ class ArenaStore {
     return this.players.find((p) => p.id === playerId)?.name ?? 'Onbekend';
   }
 
-  async challenge(opponentId: string): Promise<void> {
-    if (!this.me) return;
+  async challenge(opponentId: string, gymId: string | null = null, stake: string | null = null): Promise<boolean> {
+    if (!this.me) return false;
     this.error = null;
-    if (!this.team.length) {
-      this.error = 'Kies eerst een team.';
-      return;
-    }
-    const { error } = await supabase.from('battles').insert({ challenger_id: this.me, opponent_id: opponentId });
+    const { error } = await supabase.rpc('challenge', { p_opponent: opponentId, p_gym: gymId, p_stake: stake });
     if (error) this.error = error.message;
     await this.loadBattles();
+    return !error;
   }
 
   async cancelChallenge(): Promise<void> {
@@ -203,9 +262,23 @@ class ArenaStore {
     await this.loadBattles();
   }
 
+  async forfeit(battleId: string): Promise<void> {
+    this.error = null;
+    const { error } = await supabase.rpc('forfeit_battle', { p_battle: battleId });
+    if (error) this.error = error.message;
+    await Promise.all([this.loadBattles(), this.loadPlayers(), this.loadArena()]);
+  }
+
+  async claimAbandoned(battleId: string): Promise<void> {
+    this.error = null;
+    const { error } = await supabase.rpc('claim_abandoned_battle', { p_battle: battleId });
+    if (error) this.error = error.message;
+    await Promise.all([this.loadBattles(), this.loadPlayers(), this.loadArena()]);
+  }
+
   async finishBattle(battleId: string, winnerId: string): Promise<void> {
     await supabase.rpc('finish_battle', { p_battle: battleId, p_winner: winnerId });
-    await Promise.all([this.loadBattles(), this.loadPlayers()]);
+    await Promise.all([this.loadBattles(), this.loadPlayers(), this.loadArena()]);
   }
 
   leaveBattle(): void {

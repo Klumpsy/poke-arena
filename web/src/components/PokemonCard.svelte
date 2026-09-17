@@ -7,9 +7,10 @@
     pokemon,
     selected = false,
     order = 0,
+    compact = false,
     onclick,
     onEditMoves,
-  }: { pokemon: PokemonRow; selected?: boolean; order?: number; onclick?: () => void; onEditMoves?: () => void } = $props();
+  }: { pokemon: PokemonRow; selected?: boolean; order?: number; compact?: boolean; onclick?: () => void; onEditMoves?: () => void } = $props();
 
   const moves = $derived(battleMoves(pokemon));
   const toothless = $derived(!hasDamagingMove(moves));
@@ -22,7 +23,7 @@
   });
 </script>
 
-<div class="card" class:selected role="button" tabindex="0" onclick={onclick} onkeydown={(e) => e.key === 'Enter' && onclick?.()}>
+<div class="card" class:selected class:compact class:static={!onclick} role="button" tabindex="0" onclick={onclick} onkeydown={(e) => e.key === 'Enter' && onclick?.()}>
   <div class="sprite">
     <img {src} alt={sp.name} onerror={() => (src = staticSprite(pokemon.species_id, { shiny: pokemon.shiny }))} />
     {#if selected}<span class="order pixel">{order}</span>{/if}
@@ -36,18 +37,20 @@
     </div>
     <div class="row" style="gap: 0.3rem; margin: 0.25rem 0">
       {#each sp.types as t}<span class="badge type type-{t}">{t}</span>{/each}
-      <span class="muted" style="font-size: 0.8rem; text-transform: capitalize">{pokemon.nature}</span>
+      {#if !compact}<span class="muted" style="font-size: 0.8rem; text-transform: capitalize">{pokemon.nature}</span>{/if}
     </div>
-    <div class="stats muted">
-      HP {stats.hp} · Atk {stats.atk} · Def {stats.def} · SpA {stats.spa} · SpD {stats.spd} · Spe {stats.spe}
-    </div>
-    <div class="moves">
-      {#each moves as m}<span class="badge type type-{moveData(m).type}">{moveData(m).name}</span>{/each}
-      {#if onEditMoves}
-        <button class="edit" type="button" onclick={(e) => { e.stopPropagation(); onEditMoves(); }}>Moves kiezen</button>
-      {/if}
-    </div>
-    {#if toothless}<div class="warn">Geen aanvallende move, kies andere moves.</div>{/if}
+    {#if !compact}
+      <div class="stats muted">
+        HP {stats.hp} · Atk {stats.atk} · Def {stats.def} · SpA {stats.spa} · SpD {stats.spd} · Spe {stats.spe}
+      </div>
+      <div class="moves">
+        {#each moves as m}<span class="badge type type-{moveData(m).type}">{moveData(m).name}</span>{/each}
+        {#if onEditMoves}
+          <button class="edit" type="button" onclick={(e) => { e.stopPropagation(); onEditMoves(); }}>Moves kiezen</button>
+        {/if}
+      </div>
+      {#if toothless}<div class="warn">Geen aanvallende move, kies andere moves.</div>{/if}
+    {/if}
   </div>
 </div>
 
@@ -58,6 +61,11 @@
     transition: transform 0.08s ease, border-color 0.15s ease;
   }
   .card:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .card.static { cursor: default; }
+  .card.static:hover { border-color: var(--border); transform: none; }
+  .card.compact { padding: 0.5rem; gap: 0.6rem; }
+  .card.compact .sprite { width: 64px; height: 64px; }
+  .card.compact .sprite img { max-width: 64px; max-height: 64px; }
   .edit { font-size: 0.72rem; padding: 0.15rem 0.5rem; border-radius: 999px; }
   .warn { color: var(--warning); font-size: 0.78rem; margin-top: 0.3rem; }
   .card.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }

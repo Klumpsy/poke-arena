@@ -1,19 +1,21 @@
 <script lang="ts">
   import { store } from '../lib/store.svelte';
-  const ranked = $derived(store.players.filter((p) => p.wins + p.losses > 0 || p.id === store.me));
+  const ranked = $derived(store.players);
 </script>
 
 <section class="panel">
   <h2>Ranglijst</h2>
   <table>
-    <thead><tr><th>#</th><th>Trainer</th><th>W</th><th>V</th></tr></thead>
+    <thead><tr><th>#</th><th>Trainer</th><th>Rating</th><th>W</th><th>V</th><th title="Badges">B</th></tr></thead>
     <tbody>
       {#each ranked as p, i (p.id)}
         <tr class:me={p.id === store.me}>
           <td class="muted">{i + 1}</td>
-          <td>{p.name}</td>
+          <td>{p.name}{#if store.gymOf(p.id)} <span class="muted" style="font-size: 0.75rem">leader</span>{/if}</td>
+          <td>{p.rating}</td>
           <td>{p.wins}</td>
           <td>{p.losses}</td>
+          <td>{store.badgesOf(p.id).length}</td>
         </tr>
       {/each}
     </tbody>

@@ -5,8 +5,10 @@ export interface PlayerRow {
   email: string;
   name: string;
   last_sync_at: string | null;
+  last_seen_at: string;
   wins: number;
   losses: number;
+  rating: number;
 }
 
 export interface PokemonRow {
@@ -47,6 +49,41 @@ export interface BattleRow {
   winner_id: string | null;
   created_at: string;
   finished_at: string | null;
+  gym_id: string | null;
+  stake: string | null;
+  rating_delta: number | null;
+}
+
+export interface GymRow {
+  id: string;
+  name: string;
+  type: string;
+  sort: number;
+  leader_id: string | null;
+  claimed_at: string | null;
+}
+
+export interface BadgeRow {
+  player_id: string;
+  gym_id: string;
+  earned_at: string;
+  beaten_leader_id: string | null;
+}
+
+export interface CooldownRow {
+  player_id: string;
+  gym_id: string;
+  until: string;
+}
+
+export interface DebtRow {
+  id: string;
+  battle_id: string | null;
+  debtor_id: string;
+  creditor_id: string;
+  stake: string;
+  created_at: string;
+  done_at: string | null;
 }
 
 export interface BattleActionRow {

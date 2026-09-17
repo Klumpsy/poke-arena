@@ -107,8 +107,12 @@ export function legalActions(state: BattleState, side: Side): Action[] {
   }
   const active = activePokemon(state, side);
   const withPp = active.moves.map((m, i) => ({ m, i })).filter(({ m }) => m.pp > 0);
-  if (!withPp.length) return [{ type: 'move', moveIndex: -1 }];
-  return withPp.map(({ i }) => ({ type: 'move', moveIndex: i }));
+  const moves: Action[] = withPp.length ? withPp.map(({ i }) => ({ type: 'move', moveIndex: i })) : [{ type: 'move', moveIndex: -1 }];
+  const switches: Action[] = s.team
+    .map((p, slot) => ({ p, slot }))
+    .filter(({ p, slot }) => p.hp > 0 && slot !== s.active)
+    .map(({ slot }) => ({ type: 'switch', slot }));
+  return [...moves, ...switches];
 }
 
 function effectiveSpeed(p: BattlePokemon): number {
@@ -151,11 +155,17 @@ export function applyActions(
   events.push({ type: 'turn', turn: next.turn });
   const order = turnOrder(next, actions as Record<Side, Action>, rng);
   for (const side of order) {
+    const action = actions[side]!;
+    if (action.type === 'switch') performSwitch(next, side, action.slot, events);
+  }
+  for (const side of order) {
     if (next.phase === 'finished') break;
+    const action = actions[side]!;
+    if (action.type !== 'move') continue;
     const user = activePokemon(next, side);
     const target = activePokemon(next, other(side));
     if (user.hp <= 0 || target.hp <= 0) continue;
-    executeMove(next, side, chosenMove(user, actions[side]!), actions[side]!, rng, events);
+    executeMove(next, side, chosenMove(user, action), action, rng, events);
     checkFaint(next, side, events);
     checkFaint(next, other(side), events);
     if (checkWinner(next, events)) break;
@@ -177,8 +187,8 @@ function turnOrder(state: BattleState, actions: Record<Side, Action>, rng: Rng):
   const sides: Side[] = ['a', 'b'];
   const info = sides.map((side) => {
     const p = activePokemon(state, side);
-    const m = chosenMove(p, actions[side]);
-    return { side, priority: m.priority, speed: effectiveSpeed(p), tie: rng.next() };
+    const priority = actions[side].type === 'switch' ? 10 : chosenMove(p, actions[side]).priority;
+    return { side, priority, speed: effectiveSpeed(p), tie: rng.next() };
   });
   info.sort((x, y) => y.priority - x.priority || y.speed - x.speed || y.tie - x.tie);
   return info.map((i) => i.side);
@@ -238,7 +248,7 @@ function executeMove(state: BattleState, side: Side, mv: MoveData, action: Actio
     const slot = user.moves[action.moveIndex];
     if (slot && slot.pp > 0) slot.pp -= 1;
   }
-  events.push({ type: 'move', side, name: user.name, move: mv.name });
+  events.push({ type: 'move', side, name: user.name, move: mv.name, slug: mv.slug, moveType: mv.type, category: mv.category });
 
   const selfTarget = SELF_TARGETS.has(mv.target);
   if (!selfTarget && mv.accuracy !== null) {

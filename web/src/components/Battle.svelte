@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { describe, legalActions, move as moveData, other, pendingActors, type Action, type BattleEvent, type BattleState, type Side } from '@poke-arena/engine';
+  import { describe, legalActions, move as moveData, moveEffectiveness, other, pendingActors, type Action, type BattleEvent, type BattleState, type Side } from '@poke-arena/engine';
   import { onMount } from 'svelte';
   import { fetchActions, replayBattle, submitAction, watchBattle, type ReplayResult } from '../lib/battleClient';
   import { supabase } from '../lib/supabase';
@@ -26,14 +26,35 @@
   let busy = $state(false);
   let finishedReported = false;
   let spriteFallback = $state<Record<Side, boolean>>({ a: false, b: false });
+  let burst = $state<{ side: Side; type: string; key: number } | null>(null);
+  let popup = $state<{ side: Side; text: string; cls: string; key: number } | null>(null);
+  let fieldShake = $state(false);
+  let confirmForfeit = $state(false);
+  let now = $state(Date.now());
 
   const controlsOpen = $derived(Boolean(view && replay && !animating && view.phase !== 'finished' && pendingActors(view).includes(mySide) && !replay.submitted[mySide]));
   const waiting = $derived(Boolean(view && replay && !animating && view.phase !== 'finished' && !controlsOpen));
   const finished = $derived(Boolean(view && !animating && view.phase === 'finished'));
   const myLegal = $derived(view ? legalActions(view, mySide) : []);
+  const gym = $derived(battle.gym_id ? store.gyms.find((g) => g.id === battle.gym_id) : null);
+  const finishedRow = $derived(store.activeBattle?.id === battle.id ? store.activeBattle : battle);
+  const rowFinished = $derived(finishedRow.status === 'finished' && Boolean(view) && view!.phase !== 'finished');
+  const opponentSeen = $derived(store.players.find((p) => p.id === oppId)?.last_seen_at ?? null);
+  const opponentGone = $derived(Boolean(opponentSeen) && now - new Date(opponentSeen!).getTime() > 2 * 60 * 1000);
+
+  function effectivenessLabel(slug: string): { text: string; cls: string } | null {
+    if (!view) return null;
+    const eff = moveEffectiveness(slug, active(oppSide).types);
+    if (eff === null || eff === 1) return null;
+    if (eff === 0) return { text: 'geen effect', cls: 'eff-none' };
+    if (eff > 1) return { text: 'super effectief', cls: 'eff-super' };
+    return { text: 'niet effectief', cls: 'eff-weak' };
+  }
 
   async function refresh() {
     try {
+      now = Date.now();
+      void store.loadBattles();
       const actions = await fetchActions(battle.id);
       replay = replayBattle(battle, actions);
       if (!view) {
@@ -71,6 +92,11 @@
     }
   }
 
+  function showPopup(side: Side, text: string, cls: string) {
+    popup = { side, text, cls, key: Date.now() };
+    setTimeout(() => (popup = null), 900);
+  }
+
   function flash(side: Side, cls: string, ms = 700) {
     fx = { ...fx, [side]: cls };
     setTimeout(() => (fx = { ...fx, [side]: '' }), ms);
@@ -81,10 +107,31 @@
     switch (e.type) {
       case 'move':
         flash(e.side, e.side === mySide ? 'lunge-mine' : 'lunge-opp');
+        if (e.category !== 'status') {
+          burst = { side: other(e.side), type: e.moveType, key: Date.now() };
+          setTimeout(() => (burst = null), 800);
+        } else {
+          burst = { side: e.side, type: e.moveType, key: Date.now() };
+          setTimeout(() => (burst = null), 800);
+        }
         break;
       case 'damage':
         if (e.amount > 0) flash(e.side, 'hit');
+        if (e.crit) {
+          fieldShake = true;
+          setTimeout(() => (fieldShake = false), 600);
+        }
+        if (e.effectiveness > 1) showPopup(e.side, e.crit ? 'Critical! Super effectief!' : 'Super effectief!', 'pop-super');
+        else if (e.effectiveness === 0) showPopup(e.side, 'Geen effect', 'pop-none');
+        else if (e.effectiveness < 1) showPopup(e.side, 'Niet zo effectief', 'pop-weak');
+        else if (e.crit) showPopup(e.side, 'Critical hit!', 'pop-super');
         view.sides[e.side].team[view.sides[e.side].active].hp = e.hp;
+        break;
+      case 'stat':
+        showPopup(e.side, `${e.stat.toUpperCase()} ${e.change > 0 ? '↑' : e.change < 0 ? '↓' : '–'}`, e.change > 0 ? 'pop-super' : 'pop-weak');
+        break;
+      case 'miss':
+        showPopup(e.side === mySide ? oppSide : mySide, 'Mis!', 'pop-none');
         break;
       case 'heal':
         flash(e.side, 'heal');
@@ -92,6 +139,7 @@
         break;
       case 'status':
         view.sides[e.side].team[view.sides[e.side].active].status = e.status;
+        flash(e.side, `status-${e.status}`, 900);
         break;
       case 'cure':
         view.sides[e.side].team[view.sides[e.side].active].status = 'none';
@@ -145,19 +193,27 @@
   <div class="battle">
     <header class="row" style="margin-bottom: 0.5rem">
       <h1 class="pixel" style="font-size: 0.9rem; margin: 0">{store.nameOf(me)} vs {store.nameOf(oppId)}</h1>
+      {#if gym}<span class="badge active">Gym-uitdaging · {gym.name}</span>{/if}
+      {#if battle.stake}<span class="badge" title="Inzet">inzet: {battle.stake}</span>{/if}
       <span class="spacer"></span>
       <span class="muted">Beurt {view.turn}</span>
     </header>
 
-    <div class="field">
+    <div class="field" class:shake={fieldShake}>
+      {#if burst}
+        {#key burst.key}<div class="burst {burst.side === mySide ? 'at-mine' : 'at-opp'} burst-{burst.type}"></div>{/key}
+      {/if}
+      {#if popup}
+        {#key popup.key}<div class="popup {popup.side === mySide ? 'at-mine' : 'at-opp'} {popup.cls}">{popup.text}</div>{/key}
+      {/if}
       <div class="side opp">
         <div class="balls">{#each view.sides[oppSide].team as p}<span class="ball" class:ko={p.hp <= 0}></span>{/each}</div>
-        <HpBar hp={active(oppSide).hp} maxHp={active(oppSide).maxHp} name={active(oppSide).name} level={active(oppSide).level} status={active(oppSide).status} />
+        <HpBar hp={active(oppSide).hp} maxHp={active(oppSide).maxHp} name={active(oppSide).name} level={active(oppSide).level} status={active(oppSide).status} types={active(oppSide).types} />
         <img class="sprite {fx[oppSide]}" src={spriteFor(oppSide)} alt={active(oppSide).name} onerror={() => (spriteFallback = { ...spriteFallback, [oppSide]: true })} />
       </div>
       <div class="side mine">
         <img class="sprite {fx[mySide]}" src={spriteFor(mySide)} alt={active(mySide).name} onerror={() => (spriteFallback = { ...spriteFallback, [mySide]: true })} />
-        <HpBar mine hp={active(mySide).hp} maxHp={active(mySide).maxHp} name={active(mySide).name} level={active(mySide).level} status={active(mySide).status} />
+        <HpBar mine hp={active(mySide).hp} maxHp={active(mySide).maxHp} name={active(mySide).name} level={active(mySide).level} status={active(mySide).status} types={active(mySide).types} />
         <div class="balls">{#each view.sides[mySide].team as p}<span class="ball" class:ko={p.hp <= 0}></span>{/each}</div>
       </div>
     </div>
@@ -171,8 +227,21 @@
       </div>
 
       <div class="panel controls">
-        {#if finished}
+        {#if rowFinished}
+          <h2 class="pixel" style="font-size: 1rem">{finishedRow.winner_id === me ? 'Gewonnen!' : 'Verloren...'}</h2>
+          <p class="muted">{finishedRow.winner_id === me ? `${store.nameOf(oppId)} heeft opgegeven of is weggegaan.` : 'Je hebt opgegeven.'}</p>
+          <button class="primary" onclick={() => store.leaveBattle()}>Terug naar lobby</button>
+        {:else if finished}
           <h2 class="pixel" style="font-size: 1rem">{view.winner === mySide ? 'Gewonnen!' : 'Verloren...'}</h2>
+          {#if finishedRow.rating_delta}
+            <p class="muted">Rating {view.winner === mySide ? '+' : '-'}{finishedRow.rating_delta}</p>
+          {/if}
+          {#if gym}
+            <p>{view.winner === mySide ? (mySide === 'a' ? `Badge verdiend, jij bent nu leader van ${gym.name}!` : `Je verdedigt ${gym.name} met succes.`) : (mySide === 'a' ? `Geen badge. Over 24 uur mag je ${gym.name} opnieuw uitdagen.` : `${store.nameOf(oppId)} neemt ${gym.name} over.`)}</p>
+          {/if}
+          {#if battle.stake}
+            <p>Inzet: "{battle.stake}". {view.winner === mySide ? `${store.nameOf(oppId)} is je die verschuldigd.` : 'Die ben jij nu verschuldigd, zie Inzetten.'}</p>
+          {/if}
           <button class="primary" onclick={() => store.leaveBattle()}>Terug naar lobby</button>
         {:else if controlsOpen && view.phase === 'replace'}
           <p>Kies je volgende Pokémon:</p>
@@ -193,18 +262,45 @@
                 {:else}
                   {@const slot = active(mySide).moves[a.moveIndex]}
                   {@const m = moveData(slot.slug)}
+                  {@const eff = effectivenessLabel(slot.slug)}
                   <button class="move type-{m.type}" disabled={busy} onclick={() => act(a)} title={m.effect}>
-                    <strong>{m.name}</strong>
+                    <strong>{m.name} {#if eff}<span class="eff {eff.cls}">{eff.text}</span>{/if}</strong>
                     <span class="meta">{m.type} · {m.category === 'status' ? 'status' : `${m.power ?? '-'} pow`} · {m.accuracy ?? '-'}% · PP {slot.pp}/{slot.maxPp}</span>
                   </button>
                 {/if}
               {/if}
             {/each}
           </div>
+          {#if myLegal.some((a) => a.type === 'switch')}
+            <div class="switches">
+              <span class="muted" style="font-size: 0.8rem">Wisselen (gaat vóór de aanval van de tegenstander):</span>
+              {#each myLegal as a}
+                {#if a.type === 'switch'}
+                  {@const p = view.sides[mySide].team[a.slot]}
+                  <button disabled={busy} onclick={() => act(a)}>{p.name} <span class="muted">Lv {p.level} · {p.hp}/{p.maxHp}</span> {#each p.types as t}<span class="badge type type-{t}" style="font-size: 0.6rem">{t}</span>{/each}</button>
+                {/if}
+              {/each}
+            </div>
+          {/if}
         {:else if waiting}
           <p class="muted" style="animation: pulse 1.5s infinite">Wacht op {store.nameOf(oppId)}...</p>
+          {#if opponentGone}
+            <p class="error" style="font-size: 0.85rem">{store.nameOf(oppId)} is al 2 minuten niet online.</p>
+            <button class="primary" onclick={() => store.claimAbandoned(battle.id)}>Claim de overwinning</button>
+          {/if}
         {:else}
           <p class="muted">...</p>
+        {/if}
+        {#if !finished && !rowFinished}
+          <div class="forfeit">
+            {#if confirmForfeit}
+              <span class="muted" style="font-size: 0.85rem">Zeker? Dit telt als verlies.</span>
+              <button class="danger" onclick={() => store.forfeit(battle.id)}>Ja, opgeven</button>
+              <button onclick={() => (confirmForfeit = false)}>Nee</button>
+            {:else}
+              <button class="subtle" onclick={() => (confirmForfeit = true)}>Opgeven</button>
+            {/if}
+          </div>
         {/if}
       </div>
     </div>
@@ -239,4 +335,40 @@
   .moves { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
   .move { display: grid; text-align: left; color: #fff; border-color: transparent; padding: 0.6rem 0.8rem; }
   .move .meta { font-size: 0.72rem; opacity: 0.9; text-transform: capitalize; }
+  .eff { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.1rem 0.4rem; border-radius: 999px; background: rgba(0, 0, 0, 0.35); margin-left: 0.3rem; }
+  .eff-super { color: #86efac; } .eff-weak { color: #fca5a5; } .eff-none { color: #d4d4d8; }
+  .field.shake { animation: shake 0.5s ease; }
+  .burst { position: absolute; width: 160px; height: 160px; border-radius: 50%; pointer-events: none; animation: burst 0.8s ease-out forwards; mix-blend-mode: screen; z-index: 3; }
+  .burst.at-opp { right: 10%; top: 30px; }
+  .burst.at-mine { left: 10%; bottom: 70px; }
+  .burst-normal { background: radial-gradient(circle, #fff 0, #a8a77a 40%, transparent 70%); }
+  .burst-fire { background: radial-gradient(circle, #fff3b0 0, #ee8130 40%, transparent 70%); }
+  .burst-water { background: radial-gradient(circle, #dbeafe 0, #6390f0 40%, transparent 70%); }
+  .burst-electric { background: radial-gradient(circle, #fff 0, #f7d02c 40%, transparent 70%); }
+  .burst-grass { background: radial-gradient(circle, #ecfccb 0, #7ac74c 40%, transparent 70%); }
+  .burst-ice { background: radial-gradient(circle, #fff 0, #96d9d6 40%, transparent 70%); }
+  .burst-fighting { background: radial-gradient(circle, #fecaca 0, #c22e28 40%, transparent 70%); }
+  .burst-poison { background: radial-gradient(circle, #f5d0fe 0, #a33ea1 40%, transparent 70%); }
+  .burst-ground { background: radial-gradient(circle, #fef3c7 0, #e2bf65 40%, transparent 70%); }
+  .burst-flying { background: radial-gradient(circle, #fff 0, #a98ff3 40%, transparent 70%); }
+  .burst-psychic { background: radial-gradient(circle, #ffe4e6 0, #f95587 40%, transparent 70%); }
+  .burst-bug { background: radial-gradient(circle, #f7fee7 0, #a6b91a 40%, transparent 70%); }
+  .burst-rock { background: radial-gradient(circle, #fef9c3 0, #b6a136 40%, transparent 70%); }
+  .burst-ghost { background: radial-gradient(circle, #ede9fe 0, #735797 40%, transparent 70%); }
+  .burst-dragon { background: radial-gradient(circle, #ede9fe 0, #6f35fc 40%, transparent 70%); }
+  .burst-dark { background: radial-gradient(circle, #d6d3d1 0, #705746 40%, transparent 70%); }
+  .burst-steel { background: radial-gradient(circle, #fff 0, #b7b7ce 40%, transparent 70%); }
+  .burst-fairy { background: radial-gradient(circle, #fff 0, #d685ad 40%, transparent 70%); }
+  .popup { position: absolute; z-index: 4; font-family: var(--font-pixel); font-size: 0.75rem; padding: 0.35rem 0.6rem; border-radius: 6px; background: rgba(10, 12, 22, 0.85); animation: popup 0.9s ease-out forwards; pointer-events: none; white-space: nowrap; }
+  .popup.at-opp { right: 12%; top: 150px; }
+  .popup.at-mine { left: 12%; bottom: 200px; }
+  .pop-super { color: #86efac; } .pop-weak { color: #fca5a5; } .pop-none { color: #d4d4d8; }
+  .sprite.status-par { filter: drop-shadow(0 0 18px #f7d02c) brightness(1.3); }
+  .sprite.status-brn { filter: drop-shadow(0 0 18px #ee8130) brightness(1.2); }
+  .sprite.status-psn, .sprite.status-tox { filter: drop-shadow(0 0 18px #a33ea1); }
+  .sprite.status-slp { filter: grayscale(0.6) brightness(0.8); }
+  .sprite.status-frz { filter: drop-shadow(0 0 18px #96d9d6) brightness(1.4) saturate(0.3); }
+  .forfeit { display: flex; gap: 0.5rem; align-items: center; justify-content: flex-end; margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
+  .subtle { font-size: 0.8rem; color: var(--text-muted); padding: 0.3rem 0.7rem; }
+  .switches { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
 </style>

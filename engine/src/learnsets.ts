@@ -1,5 +1,5 @@
 import learnsetsJson from '../../data/learnsets.json';
-import { MOVES } from './data';
+import { MOVES, TYPE_CHART } from './data';
 
 type Learnset = [slug: string, level: number][];
 const LEARNSETS = learnsetsJson as unknown as Record<string, Learnset>;
@@ -27,4 +27,10 @@ export function defaultMoves(speciesId: number, level: number): string[] {
   for (const m of [...damaging].reverse()) if (picked.length < 3 && !picked.includes(m.slug)) picked.push(m.slug);
   for (const m of [...learnable].reverse()) if (picked.length < 4 && !picked.includes(m.slug)) picked.push(m.slug);
   return picked.length ? picked : ['tackle'];
+}
+
+export function moveEffectiveness(moveSlug: string, targetTypes: string[]): number | null {
+  const m = MOVES[moveSlug];
+  if (!m || m.category === 'status') return null;
+  return targetTypes.reduce((acc, t) => acc * (TYPE_CHART[m.type]?.[t] ?? 1), 1);
 }

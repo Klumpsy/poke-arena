@@ -68,3 +68,21 @@ applyActions(state, actions: Record<Side, Action>): { state, events: BattleEvent
 - engine: vitest unit tests (stats, damage, type chart, turn order, statuses, KO/replace flow, determinism).
 - web: type-check + build in CI; manual smoke test.
 - helper: shellcheck; manual install on one Mac.
+
+## v2 (2026-09-17, evening)
+
+- **Login:** name + password mapped to `<slug>@players.poke-arena`, mailer autoconfirm on (no email ever sent).
+- **Elo rating** (start 1000, K=32) drives the leaderboard; wins/losses stay visible.
+- **Gyms, king of the hill:** 8 typed gyms. Highest-rated player without a gym claims an empty one (team must
+  contain the gym type). Challenger beats the leader: badge (permanent) + takes over the gym, releasing any gym
+  they already led. Challenger loses: 24h cooldown for that gym. Leader inactive 14 days: gym released.
+- **Stakes:** optional free text on a challenge; accepting agrees. Loser owes it; listed under "Inzetten" until
+  either party marks it done.
+- **Pokédex tab:** everyone's Pokémon with species, level, types, shiny, badges and rating. Moves and stats of
+  others stay hidden until seen in battle.
+- **Battle:** switching as a turn action (resolves before moves), type badges everywhere, live effectiveness
+  labels on move buttons, per-type burst effects, crit shake, status tints, popups.
+- **Never stuck:** pending challenges expire after 3 minutes; forfeit button; a player whose opponent has had
+  no heartbeat for 2 minutes and no action for 2 minutes can claim the win; sessions without a player row sign
+  out automatically; legacy PokeTokenBar state without profiles is supported.
+- All rules live in Postgres functions (`challenge`, `respond_battle`, `settle_battle`, `claim_gym`, ...).
