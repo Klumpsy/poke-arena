@@ -39,8 +39,8 @@
     <header class="topbar">
       <h1 class="pixel" style="font-size: 1.1rem">Poke Arena</h1>
       <div class="row">
-        <span class="muted">{store.player?.name ?? store.session?.user.email}</span>
-        <button onclick={() => store.signOut()}>Uitloggen</button>
+        <button class="name" title="Naam wijzigen" onclick={() => { const n = prompt('Nieuwe naam', store.player?.name ?? ''); if (n) void store.rename(n); }}>{store.player?.name ?? 'Speler'}</button>
+        <button onclick={() => confirm('Uitloggen? Je account hangt aan deze browser; na uitloggen begin je opnieuw met een nieuwe naam en moet je het sync-commando opnieuw plakken.') && store.signOut()}>Uitloggen</button>
       </div>
     </header>
     {#if store.error}

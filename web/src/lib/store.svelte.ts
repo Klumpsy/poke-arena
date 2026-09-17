@@ -58,13 +58,18 @@ class ArenaStore {
     this.online = [];
   }
 
-  async signIn(email: string): Promise<void> {
+  async signIn(name: string): Promise<void> {
     this.error = null;
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: window.location.origin + import.meta.env.BASE_URL },
-    });
+    const { error } = await supabase.auth.signInAnonymously({ options: { data: { name } } });
     if (error) this.error = friendlyAuthError(error.message);
+  }
+
+  async rename(name: string): Promise<void> {
+    this.error = null;
+    const { error } = await supabase.rpc('rename_player', { p_name: name });
+    if (error) this.error = error.message;
+    else await this.loadPlayers();
+    await this.trackPresence();
   }
 
   async signOut(): Promise<void> {
@@ -213,9 +218,9 @@ class ArenaStore {
 }
 
 function friendlyAuthError(message: string): string {
-  if (/Alleen e-mailadressen/.test(message)) return message.replace(/^.*?(Alleen e-mailadressen.*)$/, '$1');
-  if (/Database error saving new user/.test(message)) return 'Alleen e-mailadressen van cube.nl zijn toegestaan.';
-  if (/rate limit/i.test(message)) return 'Even wachten, te veel login-mails achter elkaar.';
+  if (/Vul een naam in/.test(message)) return 'Vul een naam in van 2 tot 30 tekens.';
+  if (/Database error (saving new|creating anonymous) user/.test(message)) return 'Vul een naam in van 2 tot 30 tekens.';
+  if (/rate limit/i.test(message)) return 'Even wachten, te veel pogingen achter elkaar.';
   return message;
 }
 

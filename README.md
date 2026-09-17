@@ -21,13 +21,14 @@ type chart, STAB, crits, accuracy, stat stages and status conditions.
 
 1. Create a project at supabase.com (free tier is fine).
 2. SQL editor: paste and run `supabase/migrations/0001_schema.sql`.
-3. Authentication > Providers > Email: enable, disable "Confirm email" is not needed (magic link handles it).
-   Optional: turn off "Enable email signups" **after** everyone is in.
+3. Authentication > Sign In / Providers: enable **Anonymous sign-ins**. Players log in with just a name; the
+   account lives in the browser (localStorage). Email login is not used, so no SMTP setup is needed.
 4. Authentication > URL Configuration: set Site URL to your Pages URL
    (e.g. `https://<user>.github.io/poke-arena/`) and add it to Redirect URLs.
 5. Project Settings > API: copy the project URL and the `anon` key.
 
-Allowed email domains are defined in the SQL function `allowed_email_domains()` (default `cube.nl`).
+Anyone with the URL can join, so share it in a private channel. If email login is ever re-enabled, the SQL
+function `allowed_email_domains()` (default `cube.nl`) still restricts it.
 
 ### 2. GitHub Pages
 
@@ -38,11 +39,8 @@ Allowed email domains are defined in the SQL function `allowed_email_domains()` 
 
 ### 3. Colleagues
 
-Open the site, log in with a work email, paste the install command once. Done.
-
-Note: Supabase's built-in mailer allows only 2 auth emails per hour per project. For onboarding a whole team
-in one go, configure a custom SMTP provider under Authentication > SMTP Settings (any provider works), which
-also lifts the rate limit.
+Open the site, type a name, paste the install command once. Done. A new browser or laptop means a new
+account: type the name again and paste the (new) install command shown on the setup screen.
 
 ## Local development
 
@@ -53,7 +51,6 @@ npm run dev                    # http://localhost:5173
 npm test                       # engine tests
 ```
 
-For local login the Supabase Redirect URLs must include `http://localhost:5173/`.
 
 ## How a battle works
 
