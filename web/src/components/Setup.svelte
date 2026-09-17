@@ -18,9 +18,14 @@
   }
 
   onMount(() => {
-    const t = setInterval(() => void store.loadPokemon(), 3000);
+    const t = setInterval(() => {
+      void store.loadPokemon();
+      void store.loadPlayer();
+    }, 3000);
     return () => clearInterval(t);
   });
+
+  const syncedEmpty = $derived(Boolean(store.player?.last_sync_at) && store.pokemon.length === 0);
 </script>
 
 <div class="panel" style="max-width: 760px">
@@ -32,8 +37,18 @@
       <button class="primary" onclick={copy}>{copied ? 'Gekopieerd' : 'Kopieer commando'}</button>
       <button onclick={() => store.regenerateToken()}>Nieuwe token</button>
       <span class="spacer"></span>
-      <span class="muted" style="animation: pulse 1.5s infinite">Wacht op je eerste sync...</span>
+      {#if syncedEmpty}
+        <span class="error">Sync gelukt, maar 0 Pokémon gevonden.</span>
+      {:else}
+        <span class="muted" style="animation: pulse 1.5s infinite">Wacht op je eerste sync...</span>
+      {/if}
     </div>
+    {#if syncedEmpty}
+      <p class="error" style="margin: 0.75rem 0 0">
+        Je PokeTokenBar heeft gesynct (laatst {new Date(store.player!.last_sync_at!).toLocaleTimeString('nl-NL')}), maar er zat geen Pokémon in die we herkennen.
+        Heb je al een Pokémon (geen ei) in de app? Zo ja, dan is dit een formaat dat we nog niet kennen; het wordt automatisch opgepakt zodra dat is toegevoegd, je hoeft niets te doen.
+      </p>
+    {/if}
   {:else}
     <p class="muted">Token laden...</p>
   {/if}
