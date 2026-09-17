@@ -40,6 +40,10 @@ Allowed email domains are defined in the SQL function `allowed_email_domains()` 
 
 Open the site, log in with a work email, paste the install command once. Done.
 
+Note: Supabase's built-in mailer allows only 2 auth emails per hour per project. For onboarding a whole team
+in one go, configure a custom SMTP provider under Authentication > SMTP Settings (any provider works), which
+also lifts the rate limit.
+
 ## Local development
 
 ```sh
@@ -53,7 +57,8 @@ For local login the Supabase Redirect URLs must include `http://localhost:5173/`
 
 ## How a battle works
 
-1. Both players save a team (1 to 3 Pokémon) in the lobby.
+1. Both players save a team (1 to 3 Pokémon) in the lobby. Per Pokémon you can pick 4 moves from everything
+   the species learns by level-up up to its current level ("Moves kiezen"); default is the move set from the app.
 2. Challenge someone who is online. They accept; both teams are snapshotted into the battle row.
 3. Each turn both players submit a move. Actions are stored in `battle_actions`; both browsers replay
    the full action log through the deterministic engine (seeded by `battles.seed`), so they always agree.
