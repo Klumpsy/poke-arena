@@ -97,3 +97,5 @@ pre.cmd {
 @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
 @keyframes burst { 0% { transform: scale(0.2); opacity: 0; } 30% { opacity: 1; } 100% { transform: scale(1.4); opacity: 0; } }
 @keyframes popup { 0% { transform: translateY(10px); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(-30px); opacity: 0; } }
+@keyframes sparkle { 0%, 100% { transform: scale(0) rotate(0deg); opacity: 0; } 50% { transform: scale(1.4) rotate(180deg); opacity: 1; } }
+@keyframes shiny-glow { 0%, 100% { filter: drop-shadow(0 12px 8px rgba(0, 0, 0, 0.35)) drop-shadow(0 0 10px rgba(255, 215, 0, 0.5)); } 50% { filter: drop-shadow(0 12px 8px rgba(0, 0, 0, 0.35)) drop-shadow(0 0 22px rgba(255, 235, 120, 0.95)); } }

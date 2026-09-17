@@ -22,6 +22,8 @@ class ArenaStore {
   debts = $state<DebtRow[]>([]);
   allPokemon = $state<PokemonRow[]>([]);
   nextClaimant = $state<string | null>(null);
+  busy = $state<string[]>([]);
+  serverOffset = 0;
 
   private lobby: RealtimeChannel | null = null;
   private battlesChannel: RealtimeChannel | null = null;
@@ -61,10 +63,21 @@ class ArenaStore {
       void this.loadPlayers();
       void this.loadArena();
       void supabase.rpc('heartbeat');
-    }, 15000);
+    }, 12000);
+    document.addEventListener('visibilitychange', this.onVisible);
   }
 
+  private onVisible = () => {
+    if (document.visibilityState === 'visible') {
+      void supabase.rpc('heartbeat');
+      void this.loadPlayers();
+      void this.loadArena();
+      void this.loadBattles();
+    }
+  };
+
   private teardown(): void {
+    document.removeEventListener('visibilitychange', this.onVisible);
     if (this.lobby) void supabase.removeChannel(this.lobby);
     if (this.battlesChannel) void supabase.removeChannel(this.battlesChannel);
     this.lobby = null;
@@ -159,20 +172,40 @@ class ArenaStore {
   }
 
   async loadArena(): Promise<void> {
-    const [gyms, badges, cooldowns, debts, all, next] = await Promise.all([
+    const [gyms, badges, cooldowns, debts, all, next, busy] = await Promise.all([
       supabase.from('gyms').select('*').order('sort'),
       supabase.from('badges').select('*'),
       supabase.from('gym_cooldowns').select('*').gt('until', new Date().toISOString()),
       supabase.from('debts').select('*').order('created_at', { ascending: false }).limit(100),
       supabase.from('pokemon').select('*').order('level', { ascending: false }),
       supabase.rpc('next_claimant'),
+      supabase.rpc('busy_players'),
     ]);
+    this.busy = ((busy.data as string[] | null) ?? []).map(String);
     this.gyms = (gyms.data as GymRow[] | null) ?? [];
     this.badges = (badges.data as BadgeRow[] | null) ?? [];
     this.cooldowns = (cooldowns.data as CooldownRow[] | null) ?? [];
     this.debts = (debts.data as DebtRow[] | null) ?? [];
     this.allPokemon = (all.data as PokemonRow[] | null) ?? [];
     this.nextClaimant = (next.data as string | null) ?? null;
+  }
+
+  statusOf(playerId: string): 'battle' | 'online' | 'offline' {
+    if (this.busy.includes(playerId)) return 'battle';
+    if (this.online.some((p) => p.id === playerId)) return 'online';
+    const player = this.players.find((p) => p.id === playerId);
+    if (player && Date.now() - this.serverOffset - new Date(player.last_seen_at).getTime() < 45000) return 'online';
+    return 'offline';
+  }
+
+  lastSeenText(playerId: string): string {
+    const player = this.players.find((p) => p.id === playerId);
+    if (!player) return '';
+    const minutes = Math.round((Date.now() - this.serverOffset - new Date(player.last_seen_at).getTime()) / 60000);
+    if (minutes < 1) return 'net nog online';
+    if (minutes < 60) return `${minutes} min geleden online`;
+    if (minutes < 60 * 24) return `${Math.round(minutes / 60)} uur geleden online`;
+    return `${Math.round(minutes / 1440)} dagen geleden online`;
   }
 
   badgesOf(playerId: string): BadgeRow[] {
@@ -212,6 +245,11 @@ class ArenaStore {
     const { data } = await supabase.from('players').select('*').order('rating', { ascending: false }).order('wins', { ascending: false }).order('name');
     this.players = (data as PlayerRow[] | null) ?? [];
     if (this.me) this.player = this.players.find((p) => p.id === this.me) ?? this.player;
+    if (this.player) {
+      const mine = Date.now() - new Date(this.player.last_seen_at).getTime();
+      if (mine >= 0 && mine < 20000) this.serverOffset = 0;
+      else if (Math.abs(mine) > 60000) this.serverOffset = mine;
+    }
   }
 
   async loadBattles(): Promise<void> {
@@ -235,6 +273,7 @@ class ArenaStore {
     if (declined) this.error = `${this.nameOf(declined.opponent_id)} heeft je uitdaging afgewezen.`;
     this.outgoing = out;
     await this.trackPresence();
+    void supabase.rpc('busy_players').then(({ data }) => (this.busy = ((data as string[] | null) ?? []).map(String)));
   }
 
   nameOf(playerId: string): string {

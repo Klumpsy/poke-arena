@@ -30,8 +30,10 @@
   <p class="muted" style="margin: 0.25rem 0 1rem">Van collega's zie je soort, level en types. Moves en stats ontdek je pas in het gevecht.</p>
   {#each byPlayer as entry (entry.player.id)}
     {@const gym = store.gymOf(entry.player.id)}
+    {@const status = store.statusOf(entry.player.id)}
     <div class="trainer">
       <div class="row" style="flex-wrap: wrap; gap: 0.5rem">
+        <span class="dot {status}" title={status === 'battle' ? 'in gevecht' : status}></span>
         <strong>{entry.player.name}</strong>
         <span class="muted">{entry.player.rating} rating · {entry.player.wins}W/{entry.player.losses}V</span>
         {#if gym}<span class="badge">leader {gym.name}</span>{/if}
@@ -52,6 +54,8 @@
 </section>
 
 <style>
+  .dot.battle { background: var(--warning); box-shadow: 0 0 8px var(--warning); }
+  .dot.offline { background: #4b5563; box-shadow: none; }
   .trainer { border-top: 1px solid var(--border); padding-top: 0.75rem; margin-top: 0.75rem; }
   .cards { display: grid; gap: 0.5rem; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); margin-top: 0.5rem; }
 </style>

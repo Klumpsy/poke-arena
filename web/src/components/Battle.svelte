@@ -221,12 +221,18 @@
       {/if}
       <div class="side opp">
         <div class="balls">{#each view.sides[oppSide].team as p}<span class="ball" class:ko={p.hp <= 0}></span>{/each}</div>
-        <HpBar hp={active(oppSide).hp} maxHp={active(oppSide).maxHp} name={active(oppSide).name} level={active(oppSide).level} status={active(oppSide).status} types={active(oppSide).types} />
-        <img class="sprite {fx[oppSide]}" src={spriteFor(oppSide)} alt={active(oppSide).name} onerror={() => (spriteFallback = { ...spriteFallback, [oppSide]: true })} />
+        <HpBar hp={active(oppSide).hp} maxHp={active(oppSide).maxHp} name={active(oppSide).name} level={active(oppSide).level} status={active(oppSide).status} types={active(oppSide).types} shiny={active(oppSide).shiny} />
+        <div class="sprite-wrap opp" class:shiny={active(oppSide).shiny}>
+          {#if active(oppSide).shiny}<div class="sparkles">{#each Array(7) as _, i}<span style="--i: {i}"></span>{/each}</div>{/if}
+          <img class="sprite {fx[oppSide]}" src={spriteFor(oppSide)} alt={active(oppSide).name} onerror={() => (spriteFallback = { ...spriteFallback, [oppSide]: true })} />
+        </div>
       </div>
       <div class="side mine">
-        <img class="sprite {fx[mySide]}" src={spriteFor(mySide)} alt={active(mySide).name} onerror={() => (spriteFallback = { ...spriteFallback, [mySide]: true })} />
-        <HpBar mine hp={active(mySide).hp} maxHp={active(mySide).maxHp} name={active(mySide).name} level={active(mySide).level} status={active(mySide).status} types={active(mySide).types} />
+        <div class="sprite-wrap mine" class:shiny={active(mySide).shiny}>
+          {#if active(mySide).shiny}<div class="sparkles">{#each Array(7) as _, i}<span style="--i: {i}"></span>{/each}</div>{/if}
+          <img class="sprite {fx[mySide]}" src={spriteFor(mySide)} alt={active(mySide).name} onerror={() => (spriteFallback = { ...spriteFallback, [mySide]: true })} />
+        </div>
+        <HpBar mine hp={active(mySide).hp} maxHp={active(mySide).maxHp} name={active(mySide).name} level={active(mySide).level} status={active(mySide).status} types={active(mySide).types} shiny={active(mySide).shiny} />
         <div class="balls">{#each view.sides[mySide].team as p}<span class="ball" class:ko={p.hp <= 0}></span>{/each}</div>
       </div>
     </div>
@@ -353,6 +359,15 @@
   }
   .side { position: absolute; display: grid; gap: 0.5rem; }
   .side.opp { top: 1rem; left: 1rem; right: 1rem; grid-template-columns: auto 1fr; align-items: start; }
+  .sprite-wrap { position: absolute; }
+  .sprite-wrap.opp { right: 8%; top: 20px; }
+  .sprite-wrap.mine { left: 8%; bottom: 60px; }
+  .sprite-wrap .sprite { position: static; }
+  .sprite-wrap.shiny .sprite { filter: drop-shadow(0 12px 8px rgba(0, 0, 0, 0.35)) drop-shadow(0 0 14px rgba(255, 215, 0, 0.75)); animation: float 3s ease-in-out infinite, shiny-glow 2s ease-in-out infinite; }
+  .sparkles { position: absolute; inset: -20px; pointer-events: none; z-index: 2; }
+  .sparkles span { position: absolute; width: 10px; height: 10px; background: radial-gradient(circle, #fff 0 30%, #ffd700 60%, transparent 70%); clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); animation: sparkle 1.8s ease-in-out infinite; animation-delay: calc(var(--i) * 0.26s); }
+  .sparkles span:nth-child(1) { left: 5%; top: 10%; } .sparkles span:nth-child(2) { left: 80%; top: 5%; } .sparkles span:nth-child(3) { left: 95%; top: 45%; }
+  .sparkles span:nth-child(4) { left: 15%; top: 60%; } .sparkles span:nth-child(5) { left: 60%; top: 85%; } .sparkles span:nth-child(6) { left: 40%; top: 0%; } .sparkles span:nth-child(7) { left: 0%; top: 90%; }
   .side.opp .sprite { position: absolute; right: 8%; top: 20px; }
   .side.opp .balls { grid-column: 1 / -1; }
   .side.mine { bottom: 1rem; left: 1rem; right: 1rem; justify-items: end; }

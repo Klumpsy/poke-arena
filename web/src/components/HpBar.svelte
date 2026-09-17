@@ -1,6 +1,6 @@
 <script lang="ts">
   import TypeBadge from './TypeBadge.svelte';
-  let { hp, maxHp, name, level, status, types = [], mine = false }: { hp: number; maxHp: number; name: string; level: number; status: string; types?: string[]; mine?: boolean } = $props();
+  let { hp, maxHp, name, level, status, types = [], shiny = false, mine = false }: { hp: number; maxHp: number; name: string; level: number; status: string; types?: string[]; shiny?: boolean; mine?: boolean } = $props();
   const pct = $derived(Math.max(0, Math.min(100, (hp / maxHp) * 100)));
   const color = $derived(pct > 50 ? 'var(--hp-high)' : pct > 20 ? 'var(--hp-mid)' : 'var(--hp-low)');
   const STATUS: Record<string, string> = { par: 'PAR', slp: 'SLP', brn: 'BRN', psn: 'PSN', tox: 'PSN', frz: 'FRZ' };
@@ -11,6 +11,7 @@
     <strong>{name}</strong>
     <span class="muted">Lv {level}</span>
     {#each types as t}<TypeBadge type={t} small />{/each}
+    {#if shiny}<span class="badge shiny">✦ shiny</span>{/if}
     {#if status !== 'none'}<span class="badge status-{status}">{STATUS[status]}</span>{/if}
   </div>
   <div class="bar"><div class="fill" style="width: {pct}%; background: {color}"></div></div>

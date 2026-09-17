@@ -9,7 +9,7 @@
   const myBadges = $derived(store.badgesOf(store.me!));
 
   function online(id: string) {
-    return store.online.some((p) => p.id === id && !p.inBattle);
+    return store.statusOf(id) === 'online';
   }
 </script>
 
@@ -58,8 +58,10 @@
               <span class="muted" style="font-size: 0.8rem">Opnieuw vanaf {new Date(cooldown.until).toLocaleString('nl-NL', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</span>
             {:else if online(g.leader_id)}
               <button class="primary" disabled={!store.team.length || Boolean(store.outgoing)} onclick={() => (challenging = { opponentId: g.leader_id!, gymId: g.id })}>Gym uitdagen</button>
+            {:else if store.statusOf(g.leader_id) === 'battle'}
+              <span class="muted" style="font-size: 0.8rem">Leader is in gevecht</span>
             {:else}
-              <span class="muted" style="font-size: 0.8rem">Leader is niet online</span>
+              <span class="muted" style="font-size: 0.8rem">Leader is offline ({store.lastSeenText(g.leader_id)})</span>
             {/if}
           {/if}
         </div>
