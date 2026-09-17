@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { computeStats, hasDamagingMove, move as moveData, species } from '@poke-arena/engine';
+  import { ability as abilityData, computeStats, defaultAbility, hasDamagingMove, move as moveData, species } from '@poke-arena/engine';
   import { animatedSprite, staticSprite } from '../lib/sprites';
   import { battleMoves, type PokemonRow } from '../lib/types';
 
@@ -37,7 +37,8 @@
     </div>
     <div class="row" style="gap: 0.3rem; margin: 0.25rem 0">
       {#each sp.types as t}<span class="badge type type-{t}">{t}</span>{/each}
-      {#if !compact}<span class="muted" style="font-size: 0.8rem; text-transform: capitalize">{pokemon.nature}</span>{/if}
+      {#if !compact}<span class="muted" style="font-size: 0.8rem; text-transform: capitalize">{pokemon.nature}</span>
+        <span class="muted" style="font-size: 0.8rem" title={abilityData(pokemon.ability ?? defaultAbility(pokemon.species_id)).effect}>· {abilityData(pokemon.ability ?? defaultAbility(pokemon.species_id)).name}</span>{/if}
     </div>
     {#if !compact}
       <div class="stats muted">

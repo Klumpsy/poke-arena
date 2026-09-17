@@ -34,7 +34,8 @@
     <div class="trainer">
       <div class="row" style="flex-wrap: wrap; gap: 0.5rem">
         <span class="dot {status}" title={status === 'battle' ? 'in gevecht' : status}></span>
-        <strong>{entry.player.name}</strong>
+        <button class="namebtn" onclick={() => (store.profileId = entry.player.id)}><strong>{entry.player.name}</strong></button>
+        {#if store.championId === entry.player.id}<span class="badge crown">👑 Champion</span>{/if}
         <span class="muted">{entry.player.rating} rating · {entry.player.wins}W/{entry.player.losses}V</span>
         {#if gym}<span class="badge">leader {gym.name}</span>{/if}
         {#each store.badgesOf(entry.player.id) as b (b.gym_id)}
@@ -54,6 +55,9 @@
 </section>
 
 <style>
+  .namebtn { background: none; border: none; padding: 0; color: inherit; font: inherit; cursor: pointer; }
+  .namebtn:hover { color: var(--accent); transform: none; }
+  .crown { background: linear-gradient(90deg, #f59e0b, #fde047); color: #1a1a1a; border-color: transparent; }
   .dot.battle { background: var(--warning); box-shadow: 0 0 8px var(--warning); }
   .dot.offline { background: #4b5563; box-shadow: none; }
   .trainer { border-top: 1px solid var(--border); padding-top: 0.75rem; margin-top: 0.75rem; }

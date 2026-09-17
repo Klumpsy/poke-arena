@@ -53,7 +53,7 @@ describe('damage', () => {
 
   it('normal moves do nothing to ghosts', () => {
     const s = createBattle(team(snorlax), team(gengar), 7);
-    const { events } = run(s, 0, 3);
+    const { events } = run(s, 0, 2);
     const dmg = events.find((e) => e.type === 'damage' && e.side === 'b');
     if (dmg?.type !== 'damage') throw new Error('expected damage event');
     expect(dmg.amount).toBe(0);
@@ -111,19 +111,22 @@ describe('status moves', () => {
     expect(types(r.events)).toContain('cure');
   });
 
-  it('will-o-wisp cannot burn a fire type and toxic poisons progressively', () => {
+  it('will-o-wisp cannot burn a fire type, Immunity blocks poison, toxic poisons progressively', () => {
     const fireVsFire = createBattle(team(charizard), team(charizard), 1);
     const r = run(fireVsFire, 2, 1);
     expect(r.state.sides.b.team[0].status).toBe('none');
     expect(types(r.events)).toContain('fail');
 
-    let s = createBattle(team(venusaur), team(snorlax), 11);
+    const immune = run(createBattle(team(venusaur), team(snorlax), 11), 3, 2);
+    expect(immune.state.sides.b.team[0].status).toBe('none');
+
+    let s = createBattle(team(venusaur), team(charizard), 11);
     let hp = s.sides.b.team[0].maxHp;
-    s = run(s, 3, 2).state;
+    s = run(s, 3, 1).state;
     expect(s.sides.b.team[0].status).toBe('tox');
     expect(s.sides.b.team[0].hp).toBe(hp - Math.floor(hp / 16));
     hp = s.sides.b.team[0].hp;
-    s = run(s, 2, 2).state;
+    s = run(s, 2, 1).state;
     expect(s.sides.b.team[0].hp).toBe(hp - Math.floor((s.sides.b.team[0].maxHp * 2) / 16));
   });
 

@@ -24,7 +24,9 @@
         <li class="row" class:dim={status === 'offline'}>
           <span class="dot {status}"></span>
           <span>
-            {p.name}
+            <button class="namebtn" onclick={() => (store.profileId = p.id)}>{p.name}</button>
+            {#if store.championId === p.id}<span class="badge crown">👑</span>{/if}
+            {#if store.mainTitle(p.id)}<span class="badge title">{store.mainTitle(p.id)}</span>{/if}
             <span class="muted small">
               {#if status === 'battle'}in gevecht{:else if status === 'online'}online{:else}{store.lastSeenText(p.id)}{/if}
             </span>
@@ -52,4 +54,8 @@
   .dot.battle { background: var(--warning); box-shadow: 0 0 8px var(--warning); }
   .dot.offline { background: #4b5563; box-shadow: none; }
   .badge.busy { border-color: var(--warning); color: var(--warning); }
+  .namebtn { background: none; border: none; padding: 0; color: inherit; font: inherit; cursor: pointer; }
+  .namebtn:hover { color: var(--accent); transform: none; }
+  .crown { background: linear-gradient(90deg, #f59e0b, #fde047); border-color: transparent; margin-left: 0.3rem; }
+  .title { border-color: var(--accent); color: var(--accent); margin-left: 0.3rem; }
 </style>

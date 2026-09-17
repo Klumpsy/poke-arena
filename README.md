@@ -63,6 +63,24 @@ npm test                       # engine tests
 - Pending challenges expire after 3 minutes, players can forfeit, and an abandoned battle (opponent offline for
   2 minutes) can be claimed, so nobody gets stuck.
 
+## v3: history, tournaments, champion, quests, Discord
+
+- **Gevechten** tab: live battles to spectate, full history with replays (the action log is replayed through the engine).
+- **Toernooi** tab: anyone starts a single-elimination tournament, players join, the organiser starts the bracket
+  (seeded by rating, byes for top seeds). Matches are played as normal challenges; the winner earns a title.
+- **Champion**: with all 8 badges you may challenge the Champion (or the highest-rated player when the throne is
+  empty). Titles (Champion, Hattrick, Onverslaanbaar, Giant slayer, Gym-verdediger, Alle badges, tournament wins)
+  show next to names and on the profile (click any name).
+- **Weekquests** reset every Monday and award quest points shown on the Arena tab.
+- **Anti-cheat**: a battle only settles when the loser's client confirms the result (or the opponent abandons);
+  disagreeing clients mark the battle "disputed" with no rating change.
+- **Engine**: 50+ abilities, weather (gym type sets sun/rain/terrain), Protect, two-turn moves, Counter,
+  Sucker Punch, Leech Seed, Explosion, U-turn, Roar and more. Sprites come from the jsDelivr CDN.
+- **Discord**: notifications for challenges, results, gym changes and tournaments via `pg_net`. Enable by
+  running in the SQL editor: `select public.set_discord_webhook('https://discord.com/api/webhooks/...');`
+  (or any signed-in player can call the same RPC). Empty string turns it off.
+- **Sound**: 8-bit effects synthesised in the browser, toggle in the header.
+
 ## How a battle works
 
 1. Both players save a team (1 to 3 Pokémon) in the lobby. Per Pokémon you can pick 4 moves from everything

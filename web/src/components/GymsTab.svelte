@@ -29,6 +29,15 @@
   <p class="muted" style="margin: 0.25rem 0 1rem">
     Lege gym? Wie het eerst komt, het eerst maalt (één gym per persoon, minstens één Pokémon van dat type in je team). Daarna: versla de leader in een gym-uitdaging en je neemt de gym over, plus de badge. Versla je een leader in een gewoon gevecht, dan verdien je ook de badge en krijg je na afloop de keuze om de gym over te nemen.
   </p>
+  <div class="champion-box row">
+    <span class="badge crown">👑 Champion</span>
+    {#if store.championId}
+      <strong>{store.nameOf(store.championId)}</strong>
+      <span class="muted small">Alle 8 badges? Dan mag je de Champion uitdagen via de spelerslijst.</span>
+    {:else}
+      <span class="muted">Nog geen Champion. De eerste met alle 8 badges die de hoogst geplaatste speler ({store.players[0]?.name ?? '?'}) verslaat in een Champion-gevecht, pakt de titel.</span>
+    {/if}
+  </div>
   <div class="gyms">
     {#each store.gyms as g (g.id)}
       {@const leader = g.leader_id ? store.nameOf(g.leader_id) : null}
@@ -88,4 +97,7 @@
   .gym.empty { opacity: 0.85; }
   .leader { margin-top: 0.4rem; font-size: 0.9rem; }
   .earned { background: var(--accent); color: var(--accent-text); border-color: transparent; }
+  .champion-box { border: 1px solid #f59e0b; border-radius: var(--radius-sm); padding: 0.6rem 0.8rem; margin-bottom: 1rem; background: linear-gradient(90deg, rgba(245, 158, 11, 0.12), transparent); flex-wrap: wrap; }
+  .crown { background: linear-gradient(90deg, #f59e0b, #fde047); color: #1a1a1a; border-color: transparent; }
+  .small { font-size: 0.8rem; }
 </style>

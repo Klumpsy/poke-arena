@@ -20,6 +20,7 @@ export interface PokemonRow {
   ivs: Stats;
   moves: string[];
   custom_moves: string[] | null;
+  ability: string | null;
   shiny: boolean;
   gender: 'male' | 'female' | 'genderless';
   is_active: boolean;
@@ -36,7 +37,7 @@ export interface TeamRow {
   pokemon_ids: string[];
 }
 
-export type BattleStatus = 'pending' | 'active' | 'finished' | 'declined' | 'cancelled';
+export type BattleStatus = 'pending' | 'active' | 'finished' | 'declined' | 'cancelled' | 'disputed';
 
 export interface BattleRow {
   id: string;
@@ -53,6 +54,50 @@ export interface BattleRow {
   stake: string | null;
   rating_delta: number | null;
   gym_offer: string | null;
+  champion_match: boolean;
+  tournament_match_id: string | null;
+}
+
+export interface TournamentRow {
+  id: string;
+  name: string;
+  status: 'open' | 'running' | 'finished' | 'cancelled';
+  created_by: string;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  winner_id: string | null;
+}
+
+export interface TournamentPlayerRow {
+  tournament_id: string;
+  player_id: string;
+}
+
+export interface TournamentMatchRow {
+  id: string;
+  tournament_id: string;
+  round: number;
+  position: number;
+  p1: string | null;
+  p2: string | null;
+  winner_id: string | null;
+  battle_id: string | null;
+}
+
+export interface TitleRow {
+  player_id: string;
+  code: string;
+  label: string;
+  earned_at: string;
+}
+
+export interface QuestRow {
+  code: string;
+  title: string;
+  progress: number;
+  target: number;
+  points: number;
 }
 
 export interface GymRow {

@@ -2,20 +2,30 @@
   import { describe, legalActions, move as moveData, moveEffectiveness, other, pendingActors, type Action, type BattleEvent, type BattleState, type Side } from '@poke-arena/engine';
   import { onMount } from 'svelte';
   import { fetchActions, replayBattle, submitAction, watchBattle, type ReplayResult } from '../lib/battleClient';
+  import { battleOptions, TERRAIN_LABEL, WEATHER_LABEL } from '../lib/gymField';
+  import { play } from '../lib/sound';
   import { supabase } from '../lib/supabase';
-  import { animatedSprite, staticSprite } from '../lib/sprites';
+  import { animatedSprite, preloadSprites, staticSprite } from '../lib/sprites';
   import { store } from '../lib/store.svelte';
   import { sideOf, type BattleRow } from '../lib/types';
   import HpBar from './HpBar.svelte';
 
-  let { battle }: { battle: BattleRow } = $props();
+  let { battle, mode = 'play' }: { battle: BattleRow; mode?: 'play' | 'spectate' | 'replay' } = $props();
 
   const me = store.me!;
   // svelte-ignore state_referenced_locally
-  const mySide: Side = sideOf(battle, me);
+  const playing = mode === 'play';
+  // svelte-ignore state_referenced_locally
+  const mySide: Side = playing ? sideOf(battle, me) : 'a';
   const oppSide: Side = other(mySide);
   // svelte-ignore state_referenced_locally
+  const myId = mySide === 'a' ? battle.challenger_id : battle.opponent_id;
+  // svelte-ignore state_referenced_locally
   const oppId = mySide === 'a' ? battle.opponent_id : battle.challenger_id;
+  // svelte-ignore state_referenced_locally
+  const options = battleOptions(battle, store.gyms);
+  let replayQueue = $state<ReplayResult | null>(null);
+  let autoplay = $state(true);
 
   let replay = $state<ReplayResult | null>(null);
   let view = $state<BattleState | null>(null);
@@ -33,19 +43,21 @@
   let abandon = $state<{ claimable: boolean; secondsLeft: number; opponentSeenAgo: number } | null>(null);
   let gymTaken = $state(false);
 
-  const controlsOpen = $derived(Boolean(view && replay && !animating && view.phase !== 'finished' && pendingActors(view).includes(mySide) && !replay.submitted[mySide]));
-  const waiting = $derived(Boolean(view && replay && !animating && view.phase !== 'finished' && !controlsOpen));
+  const controlsOpen = $derived(playing && Boolean(view && replay && !animating && view.phase !== 'finished' && pendingActors(view).includes(mySide) && !replay.submitted[mySide]));
+  const waiting = $derived(playing && Boolean(view && replay && !animating && view.phase !== 'finished' && !controlsOpen));
   const finished = $derived(Boolean(view && !animating && view.phase === 'finished'));
   const myLegal = $derived(view ? legalActions(view, mySide) : []);
   const gym = $derived(battle.gym_id ? store.gyms.find((g) => g.id === battle.gym_id) : null);
   const finishedRow = $derived(store.activeBattle?.id === battle.id ? store.activeBattle : battle);
   const rowFinished = $derived(finishedRow.status === 'finished' && Boolean(view) && view!.phase !== 'finished');
+  const disputed = $derived(finishedRow.status === 'disputed');
+  const awaitingConfirm = $derived(playing && finished && finishedRow.status === 'active' && view?.winner === mySide);
   const offeredGym = $derived(finishedRow.gym_offer ? store.gyms.find((g) => g.id === finishedRow.gym_offer) : null);
   const iWon = $derived(finishedRow.winner_id === me);
   const myGym = $derived(store.gymOf(me));
 
   async function checkAbandon() {
-    if (!waiting) {
+    if (!waiting && !awaitingConfirm) {
       abandon = null;
       return;
     }
@@ -64,14 +76,30 @@
 
   async function refresh() {
     try {
-      void store.loadBattles();
-      void supabase.rpc('heartbeat');
+      if (playing) {
+        void store.loadBattles();
+        void supabase.rpc('heartbeat');
+      } else if (mode === 'spectate') {
+        const { data } = await supabase.from('battles').select('*').eq('id', battle.id).maybeSingle();
+        if (data) battle = data as BattleRow;
+      }
       const actions = await fetchActions(battle.id);
-      replay = replayBattle(battle, actions);
+      const full = replayBattle(battle, actions, options);
+      if (mode === 'replay') {
+        replayQueue = full;
+        if (!view) {
+          view = createViewStart(full);
+          replay = { ...full, turns: [], states: [] };
+        }
+        if (autoplay) void stepReplay();
+        return;
+      }
+      replay = full;
       if (!view) {
-        view = replay.turns.length ? replay.states[replay.turns.length - 1] : replay.state;
-        playedTurns = replay.turns.length;
-        if (playedTurns) log = replay.turns.flat().filter((e) => e.type !== 'end').map(describe);
+        const skipAnimation = playing || full.turns.length > 3;
+        view = skipAnimation && full.turns.length ? full.states[full.turns.length - 1] : skipAnimation ? full.state : createViewStart(full);
+        playedTurns = skipAnimation ? full.turns.length : 0;
+        if (playedTurns) log = full.turns.flat().filter((e) => e.type !== 'end').map(describe);
       }
       void animateNewTurns();
     } catch (e) {
@@ -79,8 +107,21 @@
     }
   }
 
-  const DELAY: Partial<Record<BattleEvent['type'], number>> = { turn: 400, move: 900, damage: 900, faint: 1000, switch: 800, end: 600 };
+  const DELAY: Partial<Record<BattleEvent['type'], number>> = { turn: 400, move: 900, damage: 900, faint: 1000, switch: 800, end: 600, weather: 700, terrain: 700, ability: 800, protect: 700, charge: 800 };
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  function createViewStart(full: ReplayResult): BattleState {
+    const base = replayBattle(battle, [], options).state;
+    return structuredClone(base);
+  }
+
+  async function stepReplay() {
+    if (!replayQueue || !replay || animating) return;
+    if (playedTurns >= replayQueue.turns.length) return;
+    replay = { ...replayQueue, turns: replayQueue.turns.slice(0, playedTurns + 1), states: replayQueue.states.slice(0, playedTurns + 1) };
+    await animateNewTurns();
+    if (autoplay && replayQueue && playedTurns < replayQueue.turns.length) void stepReplay();
+  }
 
   async function animateNewTurns() {
     if (animating || !replay) return;
@@ -98,8 +139,11 @@
     animating = false;
     if (view?.phase === 'finished' && !finishedReported) {
       finishedReported = true;
-      const winnerId = view.winner === mySide ? me : oppId;
-      await store.finishBattle(battle.id, winnerId);
+      play(view.winner === mySide ? 'win' : 'lose');
+      if (playing) {
+        const winnerId = view.winner === mySide ? me : oppId;
+        await store.finishBattle(battle.id, winnerId);
+      }
     }
   }
 
@@ -127,7 +171,10 @@
         }
         break;
       case 'damage':
-        if (e.amount > 0) flash(e.side, 'hit');
+        if (e.amount > 0) {
+          flash(e.side, 'hit');
+          play(e.crit ? 'crit' : e.effectiveness > 1 ? 'super' : 'hit');
+        }
         if (e.crit) {
           fieldShake = true;
           setTimeout(() => (fieldShake = false), 600);
@@ -146,21 +193,41 @@
         break;
       case 'heal':
         flash(e.side, 'heal');
+        play('heal');
         view.sides[e.side].team[view.sides[e.side].active].hp = e.hp;
         break;
       case 'status':
         view.sides[e.side].team[view.sides[e.side].active].status = e.status;
         flash(e.side, `status-${e.status}`, 900);
+        play('status');
+        break;
+      case 'protect':
+        showPopup(e.side, 'Beschermd', 'pop-none');
+        play('protect');
+        break;
+      case 'charge':
+        showPopup(e.side, 'Laadt op...', 'pop-none');
+        break;
+      case 'weather':
+        if (e.text !== 'residual') view.field.weather = e.text === 'start' ? e.weather : 'none';
+        break;
+      case 'terrain':
+        view.field.terrain = e.text === 'start' ? e.terrain : 'none';
+        break;
+      case 'ability':
+        showPopup(e.side, describe(e).split(' van ')[0], 'pop-super');
         break;
       case 'cure':
         view.sides[e.side].team[view.sides[e.side].active].status = 'none';
         break;
       case 'faint':
         flash(e.side, 'faint', 1000);
+        play('faint');
         break;
       case 'switch':
         view.sides[e.side].active = e.slot;
         spriteFallback = { ...spriteFallback, [e.side]: false };
+        play('switch');
         break;
     }
   }
@@ -179,16 +246,25 @@
   }
 
   onMount(() => {
+    const teams = [...(battle.challenger_team?.pokemon ?? []).map((p) => ({ speciesId: p.speciesId, shiny: p.shiny, back: mySide === 'a' })), ...(battle.opponent_team?.pokemon ?? []).map((p) => ({ speciesId: p.speciesId, shiny: p.shiny, back: mySide === 'b' }))];
+    preloadSprites(teams);
     void refresh();
+    if (mode === 'replay') return;
     const channel = watchBattle(battle.id, () => void refresh());
     const poll = setInterval(() => void refresh(), 4000);
-    const abandonPoll = setInterval(() => void checkAbandon(), 10000);
+    const abandonPoll = playing ? setInterval(() => void checkAbandon(), 10000) : null;
     return () => {
       void supabase.removeChannel(channel);
       clearInterval(poll);
-      clearInterval(abandonPoll);
+      if (abandonPoll) clearInterval(abandonPoll);
     };
   });
+
+  function leave() {
+    if (mode === 'spectate') store.watching = null;
+    else if (mode === 'replay') store.replaying = null;
+    else store.leaveBattle();
+  }
 
   function active(side: Side) {
     return view!.sides[side].team[view!.sides[side].active];
@@ -205,14 +281,21 @@
 {:else}
   <div class="battle">
     <header class="row" style="margin-bottom: 0.5rem">
-      <h1 class="pixel" style="font-size: 0.9rem; margin: 0">{store.nameOf(me)} vs {store.nameOf(oppId)}</h1>
+      <h1 class="pixel" style="font-size: 0.9rem; margin: 0">{store.nameOf(myId)} vs {store.nameOf(oppId)}</h1>
+      {#if mode === 'spectate'}<span class="badge">je kijkt mee</span>{/if}
+      {#if mode === 'replay'}<span class="badge">replay</span>{/if}
       {#if gym}<span class="badge active">Gym-uitdaging · {gym.name}</span>{/if}
+      {#if battle.champion_match}<span class="badge champion">👑 Champion-gevecht</span>{/if}
+      {#if battle.tournament_match_id}<span class="badge">toernooi</span>{/if}
+      {#if view.field.weather !== 'none'}<span class="badge weather-{view.field.weather}">{WEATHER_LABEL[view.field.weather]}</span>{/if}
+      {#if view.field.terrain !== 'none'}<span class="badge terrain-{view.field.terrain}">{TERRAIN_LABEL[view.field.terrain]}</span>{/if}
+      {#if mode !== 'play'}<button class="subtle" onclick={leave}>Sluiten</button>{/if}
       {#if battle.stake}<span class="badge" title="Inzet">inzet: {battle.stake}</span>{/if}
       <span class="spacer"></span>
       <span class="muted">Beurt {view.turn}</span>
     </header>
 
-    <div class="field" class:shake={fieldShake}>
+    <div class="field weather-{view.field.weather} terrain-{view.field.terrain}" class:shake={fieldShake}>
       {#if burst}
         {#key burst.key}<div class="burst {burst.side === mySide ? 'at-mine' : 'at-opp'} burst-{burst.type}"></div>{/key}
       {/if}
@@ -232,7 +315,7 @@
           {#if active(mySide).shiny}<div class="sparkles">{#each Array(7) as _, i}<span style="--i: {i}"></span>{/each}</div>{/if}
           <img class="sprite {fx[mySide]}" src={spriteFor(mySide)} alt={active(mySide).name} onerror={() => (spriteFallback = { ...spriteFallback, [mySide]: true })} />
         </div>
-        <HpBar mine hp={active(mySide).hp} maxHp={active(mySide).maxHp} name={active(mySide).name} level={active(mySide).level} status={active(mySide).status} types={active(mySide).types} shiny={active(mySide).shiny} />
+        <HpBar mine={playing} hp={active(mySide).hp} maxHp={active(mySide).maxHp} name={active(mySide).name} level={active(mySide).level} status={active(mySide).status} types={active(mySide).types} shiny={active(mySide).shiny} ability={playing ? active(mySide).ability : undefined} />
         <div class="balls">{#each view.sides[mySide].team as p}<span class="ball" class:ko={p.hp <= 0}></span>{/each}</div>
       </div>
     </div>
@@ -246,11 +329,43 @@
       </div>
 
       <div class="panel controls">
-        {#if rowFinished || finished}
+        {#if mode === 'replay'}
+          <p class="muted">Replay van {new Date(battle.finished_at ?? battle.created_at).toLocaleString('nl-NL')}. Winnaar: <strong>{store.nameOf(battle.winner_id!)}</strong>.</p>
+          <div class="row" style="flex-wrap: wrap">
+            <button class="primary" disabled={animating || !replayQueue || playedTurns >= (replayQueue?.turns.length ?? 0)} onclick={() => { autoplay = false; void stepReplay(); }}>Volgende beurt</button>
+            <button onclick={() => { autoplay = !autoplay; if (autoplay) void stepReplay(); }}>{autoplay ? 'Pauze' : 'Automatisch afspelen'}</button>
+            <span class="muted small">Beurt {playedTurns}/{replayQueue?.turns.length ?? 0}</span>
+            <span class="spacer"></span>
+            <button onclick={leave}>Sluiten</button>
+          </div>
+        {:else if mode === 'spectate'}
+          {#if finished || finishedRow.status === 'finished'}
+            <h2 class="pixel" style="font-size: 1rem">{store.nameOf(finishedRow.winner_id ?? (view.winner === 'a' ? battle.challenger_id : battle.opponent_id))} wint!</h2>
+            <button class="primary" onclick={leave}>Terug</button>
+          {:else}
+            <p class="muted" style="animation: pulse 1.5s infinite">Live: wachten op de volgende beurt...</p>
+          {/if}
+        {:else if disputed}
+          <h2 class="pixel" style="font-size: 1rem">Onbeslist</h2>
+          <p class="muted">Jullie browsers waren het niet eens over de uitslag. Geen rating-verandering. Speel het gerust opnieuw.</p>
+          <button class="primary" onclick={() => store.leaveBattle()}>Terug naar lobby</button>
+        {:else if awaitingConfirm && !rowFinished}
+          <h2 class="pixel" style="font-size: 1rem">Gewonnen!</h2>
+          <p class="muted" style="animation: pulse 1.5s infinite">Wacht op bevestiging van {store.nameOf(oppId)}...</p>
+          {#if abandon?.claimable}
+            <button class="primary" onclick={() => store.claimAbandoned(battle.id)}>Tegenstander is weg, bevestig zelf</button>
+          {/if}
+        {:else if rowFinished || finished}
           {@const won = rowFinished ? iWon : view.winner === mySide}
           <h2 class="pixel" style="font-size: 1rem">{won ? 'Gewonnen!' : 'Verloren...'}</h2>
-          {#if rowFinished}
+          {#if rowFinished && view.phase !== 'finished'}
             <p class="muted">{won ? `${store.nameOf(oppId)} heeft opgegeven of is weggegaan.` : 'Je hebt opgegeven.'}</p>
+          {/if}
+          {#if battle.champion_match}
+            <p>{won && mySide === 'a' ? '👑 Jij bent de nieuwe Champion!' : won ? 'Je verdedigt je Champion-titel.' : mySide === 'a' ? 'De Champion houdt stand.' : `${store.nameOf(oppId)} is de nieuwe Champion.`}</p>
+          {/if}
+          {#if battle.tournament_match_id}
+            <p>{won ? 'Je gaat door naar de volgende ronde van het toernooi.' : 'Je ligt uit het toernooi.'}</p>
           {/if}
           {#if finishedRow.rating_delta}
             <p class="muted">Rating {won ? '+' : '-'}{finishedRow.rating_delta}</p>
@@ -334,7 +449,7 @@
           <p class="muted">...</p>
         {/if}
         {#if store.error}<p class="error" style="font-size: 0.85rem">{store.error} <button class="subtle" onclick={() => (store.error = null)}>ok</button></p>{/if}
-        {#if !finished && !rowFinished}
+        {#if playing && !finished && !rowFinished && !disputed}
           <div class="forfeit">
             {#if confirmForfeit}
               <span class="muted" style="font-size: 0.85rem">Zeker? Dit telt als verlies.</span>
@@ -390,6 +505,18 @@
   .eff { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.1rem 0.4rem; border-radius: 999px; background: rgba(0, 0, 0, 0.35); margin-left: 0.3rem; }
   .eff-super { color: #86efac; } .eff-weak { color: #fca5a5; } .eff-none { color: #d4d4d8; }
   .field.shake { animation: shake 0.5s ease; }
+  .field.weather-sun { background: linear-gradient(180deg, #f6b73c 0%, #ffe29a 45%, #7cc25a 46%, #3f8f3f 100%); }
+  .field.weather-rain { background: linear-gradient(180deg, #2b3a67 0%, #4d6a9a 45%, #3f7a4a 46%, #2d5a33 100%); }
+  .field.weather-sand { background: linear-gradient(180deg, #c9a15a 0%, #e7cf8a 45%, #b8944a 46%, #8a6b2f 100%); }
+  .field.weather-hail { background: linear-gradient(180deg, #8fb3d9 0%, #dbe9f7 45%, #e9f2fb 46%, #b9cfe3 100%); }
+  .field.terrain-electric { box-shadow: inset 0 -60px 80px rgba(247, 208, 44, 0.45), var(--shadow); }
+  .field.terrain-grassy { box-shadow: inset 0 -60px 80px rgba(122, 199, 76, 0.55), var(--shadow); }
+  .field.terrain-psychic { box-shadow: inset 0 -60px 80px rgba(249, 85, 135, 0.45), var(--shadow); }
+  .field.terrain-misty { box-shadow: inset 0 -60px 80px rgba(214, 133, 173, 0.45), var(--shadow); }
+  .badge.champion { background: linear-gradient(90deg, #f59e0b, #fde047); color: #1a1a1a; border-color: transparent; }
+  .badge.weather-sun { background: #f6b73c; color: #1a1a1a; } .badge.weather-rain { background: #4d6a9a; color: #fff; } .badge.weather-sand { background: #c9a15a; color: #1a1a1a; } .badge.weather-hail { background: #dbe9f7; color: #1a1a1a; }
+  .badge.terrain-electric { background: #f7d02c; color: #1a1a1a; } .badge.terrain-grassy { background: #7ac74c; color: #1a1a1a; } .badge.terrain-psychic { background: #f95587; color: #fff; } .badge.terrain-misty { background: #d685ad; color: #fff; }
+  .small { font-size: 0.8rem; }
   .burst { position: absolute; width: 160px; height: 160px; border-radius: 50%; pointer-events: none; animation: burst 0.8s ease-out forwards; mix-blend-mode: screen; z-index: 3; }
   .burst.at-opp { right: 10%; top: 30px; }
   .burst.at-mine { left: 10%; bottom: 70px; }

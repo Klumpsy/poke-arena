@@ -18,6 +18,7 @@ const pokemonData = await gql(`{
     id name
     pokemon_v2_pokemontypes(order_by: {slot: asc}) { pokemon_v2_type { name } }
     pokemon_v2_pokemonstats { base_stat pokemon_v2_stat { name } }
+    pokemon_v2_pokemonabilities(order_by: {slot: asc}) { is_hidden pokemon_v2_ability { name } }
     pokemon_v2_pokemonspecy { pokemon_v2_pokemonspeciesnames(where: {language_id: {_eq: 9}}) { name } }
   }
 }`);
@@ -33,6 +34,7 @@ for (const p of pokemonData.pokemon_v2_pokemon) {
     slug: p.name,
     types: p.pokemon_v2_pokemontypes.map((t) => t.pokemon_v2_type.name),
     base,
+    abilities: p.pokemon_v2_pokemonabilities.map((a) => ({ name: a.pokemon_v2_ability.name, hidden: a.is_hidden })),
   };
 }
 
@@ -80,6 +82,19 @@ for (const m of moveData.pokemon_v2_move) {
   };
 }
 
+const abilityData = await gql(`{
+  pokemon_v2_ability(where: {is_main_series: {_eq: true}}) {
+    name
+    pokemon_v2_abilitynames(where: {language_id: {_eq: 9}}) { name }
+    pokemon_v2_abilityeffecttexts(where: {language_id: {_eq: 9}}) { short_effect }
+  }
+}`);
+const abilities = {};
+for (const a of abilityData.pokemon_v2_ability) {
+  abilities[a.name] = { slug: a.name, name: a.pokemon_v2_abilitynames[0]?.name ?? a.name, effect: a.pokemon_v2_abilityeffecttexts[0]?.short_effect ?? '' };
+}
+writeFileSync('data/abilities.json', JSON.stringify(abilities));
+
 const typeData = await gql(`{
   pokemon_v2_typeefficacy {
     damage_factor
@@ -96,4 +111,4 @@ for (const t of typeData.pokemon_v2_typeefficacy) {
 writeFileSync('data/pokemon.json', JSON.stringify(pokemon));
 writeFileSync('data/moves.json', JSON.stringify(moves));
 writeFileSync('data/types.json', JSON.stringify(types));
-console.log(Object.keys(pokemon).length, 'pokemon', Object.keys(moves).length, 'moves', Object.keys(types).length, 'types');
+console.log(Object.keys(pokemon).length, 'pokemon', Object.keys(moves).length, 'moves', Object.keys(types).length, 'types', Object.keys(abilities).length, 'abilities');

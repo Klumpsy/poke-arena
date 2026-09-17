@@ -1,7 +1,7 @@
 import { species } from '@poke-arena/engine';
 import type { RealtimeChannel, Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
-import type { BadgeRow, BattleRow, CooldownRow, DebtRow, GymRow, PlayerRow, PokemonRow, PresenceMeta, TeamRow } from './types';
+import type { BadgeRow, BattleRow, CooldownRow, DebtRow, GymRow, PlayerRow, PokemonRow, PresenceMeta, QuestRow, TeamRow, TitleRow, TournamentMatchRow, TournamentPlayerRow, TournamentRow } from './types';
 
 class ArenaStore {
   session = $state<Session | null>(null);
@@ -24,6 +24,19 @@ class ArenaStore {
   nextClaimant = $state<string | null>(null);
   busy = $state<string[]>([]);
   serverOffset = 0;
+  history = $state<BattleRow[]>([]);
+  liveBattles = $state<BattleRow[]>([]);
+  titles = $state<TitleRow[]>([]);
+  championId = $state<string | null>(null);
+  tournament = $state<TournamentRow | null>(null);
+  tournamentPlayers = $state<TournamentPlayerRow[]>([]);
+  tournamentMatches = $state<TournamentMatchRow[]>([]);
+  pastTournaments = $state<TournamentRow[]>([]);
+  quests = $state<QuestRow[]>([]);
+  discordConfigured = $state(false);
+  watching = $state<BattleRow | null>(null);
+  replaying = $state<BattleRow | null>(null);
+  profileId = $state<string | null>(null);
 
   private lobby: RealtimeChannel | null = null;
   private battlesChannel: RealtimeChannel | null = null;
@@ -182,12 +195,68 @@ class ArenaStore {
       supabase.rpc('busy_players'),
     ]);
     this.busy = ((busy.data as string[] | null) ?? []).map(String);
+    void this.loadMeta();
     this.gyms = (gyms.data as GymRow[] | null) ?? [];
     this.badges = (badges.data as BadgeRow[] | null) ?? [];
     this.cooldowns = (cooldowns.data as CooldownRow[] | null) ?? [];
     this.debts = (debts.data as DebtRow[] | null) ?? [];
     this.allPokemon = (all.data as PokemonRow[] | null) ?? [];
     this.nextClaimant = (next.data as string | null) ?? null;
+  }
+
+  async loadMeta(): Promise<void> {
+    const [history, live, titles, champion, tournaments, quests, discord] = await Promise.all([
+      supabase.from('battles').select('*').eq('status', 'finished').order('finished_at', { ascending: false }).limit(60),
+      supabase.from('battles').select('*').eq('status', 'active').order('created_at', { ascending: false }),
+      supabase.from('titles').select('*'),
+      supabase.from('champion').select('*').eq('id', 1).maybeSingle(),
+      supabase.from('tournaments').select('*').order('created_at', { ascending: false }).limit(10),
+      this.me ? supabase.rpc('weekly_quests', { p_player: this.me }) : Promise.resolve({ data: [] }),
+      supabase.rpc('discord_configured'),
+    ]);
+    this.history = (history.data as BattleRow[] | null) ?? [];
+    this.liveBattles = (live.data as BattleRow[] | null) ?? [];
+    this.titles = (titles.data as TitleRow[] | null) ?? [];
+    this.championId = (champion.data as { player_id: string | null } | null)?.player_id ?? null;
+    const all = (tournaments.data as TournamentRow[] | null) ?? [];
+    this.tournament = all.find((t) => t.status === 'open' || t.status === 'running') ?? null;
+    this.pastTournaments = all.filter((t) => t.status === 'finished');
+    this.quests = (quests.data as QuestRow[] | null) ?? [];
+    this.discordConfigured = Boolean(discord.data);
+    if (this.tournament) {
+      const [players, matches] = await Promise.all([
+        supabase.from('tournament_players').select('*').eq('tournament_id', this.tournament.id),
+        supabase.from('tournament_matches').select('*').eq('tournament_id', this.tournament.id).order('round').order('position'),
+      ]);
+      this.tournamentPlayers = (players.data as TournamentPlayerRow[] | null) ?? [];
+      this.tournamentMatches = (matches.data as TournamentMatchRow[] | null) ?? [];
+    } else {
+      this.tournamentPlayers = [];
+      this.tournamentMatches = [];
+    }
+  }
+
+  titlesOf(playerId: string): TitleRow[] {
+    return this.titles.filter((t) => t.player_id === playerId);
+  }
+
+  mainTitle(playerId: string): string | null {
+    const order = ['champion', 'all-badges', 'streak-5', 'gym-defender', 'giant-slayer', 'streak-3'];
+    const mine = this.titlesOf(playerId);
+    const tournament = mine.find((t) => t.code.startsWith('tournament-'));
+    for (const code of order) {
+      const t = mine.find((x) => x.code === code);
+      if (t) return t.label;
+    }
+    return tournament?.label ?? null;
+  }
+
+  async rpc(name: string, args: Record<string, unknown> = {}): Promise<boolean> {
+    this.error = null;
+    const { error } = await supabase.rpc(name, args);
+    if (error) this.error = error.message;
+    await Promise.all([this.loadArena(), this.loadBattles()]);
+    return !error;
   }
 
   statusOf(playerId: string): 'battle' | 'online' | 'offline' {
@@ -280,10 +349,16 @@ class ArenaStore {
     return this.players.find((p) => p.id === playerId)?.name ?? 'Onbekend';
   }
 
-  async challenge(opponentId: string, gymId: string | null = null, stake: string | null = null): Promise<boolean> {
+  async challenge(opponentId: string, gymId: string | null = null, stake: string | null = null, extra: { tournamentMatch?: string; champion?: boolean } = {}): Promise<boolean> {
     if (!this.me) return false;
     this.error = null;
-    const { error } = await supabase.rpc('challenge', { p_opponent: opponentId, p_gym: gymId, p_stake: stake });
+    const { error } = await supabase.rpc('challenge', {
+      p_opponent: opponentId,
+      p_gym: gymId,
+      p_stake: stake,
+      p_tournament_match: extra.tournamentMatch ?? null,
+      p_champion: extra.champion ?? false,
+    });
     if (error) this.error = error.message;
     await this.loadBattles();
     return !error;

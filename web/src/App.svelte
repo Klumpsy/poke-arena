@@ -3,7 +3,9 @@
   import Battle from './components/Battle.svelte';
   import Lobby from './components/Lobby.svelte';
   import Login from './components/Login.svelte';
+  import ProfileModal from './components/ProfileModal.svelte';
   import Setup from './components/Setup.svelte';
+  import { setSoundEnabled, soundEnabled } from './lib/sound';
   import { configured } from './lib/supabase';
   import { store } from './lib/store.svelte';
 
@@ -11,11 +13,14 @@
     if (configured) void store.init();
   });
 
+  let sound = $state(soundEnabled());
   const screen = $derived.by(() => {
     if (!configured) return 'unconfigured';
     if (!store.ready) return 'loading';
     if (!store.session) return 'login';
     if (store.activeBattle) return 'battle';
+    if (store.watching) return 'spectate';
+    if (store.replaying) return 'replay';
     if (!store.pokemon.length) return 'setup';
     return 'lobby';
   });
@@ -35,11 +40,20 @@
     {#key store.activeBattle!.id}
       <Battle battle={store.activeBattle!} />
     {/key}
+  {:else if screen === 'spectate'}
+    {#key store.watching!.id}
+      <Battle battle={store.watching!} mode="spectate" />
+    {/key}
+  {:else if screen === 'replay'}
+    {#key store.replaying!.id}
+      <Battle battle={store.replaying!} mode="replay" />
+    {/key}
   {:else}
     <header class="topbar">
       <h1 class="pixel" style="font-size: 1.1rem">Poke Arena</h1>
       <div class="row">
         <button class="name" title="Naam wijzigen" onclick={() => { const n = prompt('Nieuwe naam', store.player?.name ?? ''); if (n) void store.rename(n); }}>{store.player?.name ?? 'Speler'}</button>
+        <button title={sound ? 'Geluid uit' : 'Geluid aan'} onclick={() => { sound = !sound; setSoundEnabled(sound); }}>{sound ? '🔊' : '🔇'}</button>
         <button onclick={() => store.signOut()}>Uitloggen</button>
       </div>
     </header>
@@ -51,5 +65,8 @@
     {:else}
       <Lobby />
     {/if}
+  {/if}
+  {#if store.profileId}
+    <ProfileModal playerId={store.profileId} onclose={() => (store.profileId = null)} />
   {/if}
 </div>

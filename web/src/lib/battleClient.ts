@@ -1,4 +1,4 @@
-import { applyActions, createBattle, pendingActors, type Action, type BattleEvent, type BattleState, type Side } from '@poke-arena/engine';
+import { applyActions, createBattle, pendingActors, type Action, type BattleEvent, type BattleOptions, type BattleState, type Side } from '@poke-arena/engine';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { sideOf, type BattleActionRow, type BattleRow } from './types';
@@ -10,9 +10,9 @@ export interface ReplayResult {
   submitted: Partial<Record<Side, Action>>;
 }
 
-export function replayBattle(battle: BattleRow, actions: BattleActionRow[]): ReplayResult {
+export function replayBattle(battle: BattleRow, actions: BattleActionRow[], options: BattleOptions = {}): ReplayResult {
   if (!battle.challenger_team || !battle.opponent_team) throw new Error('Battle has no team snapshots');
-  let state = createBattle(battle.challenger_team, battle.opponent_team, Number(battle.seed));
+  let state = createBattle(battle.challenger_team, battle.opponent_team, Number(battle.seed), options);
   const turns: BattleEvent[][] = [];
   const states: BattleState[] = [];
   const byTurn = new Map<number, Partial<Record<Side, Action>>>();

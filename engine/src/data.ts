@@ -1,6 +1,7 @@
 import pokemonJson from '../../data/pokemon.json';
 import movesJson from '../../data/moves.json';
 import typesJson from '../../data/types.json';
+import abilitiesJson from '../../data/abilities.json';
 import type { StatKey } from './types';
 
 export interface SpeciesData {
@@ -9,6 +10,13 @@ export interface SpeciesData {
   slug: string;
   types: string[];
   base: Record<StatKey, number>;
+  abilities: { name: string; hidden: boolean }[];
+}
+
+export interface AbilityData {
+  slug: string;
+  name: string;
+  effect: string;
 }
 
 export interface MoveData {
@@ -40,6 +48,16 @@ export interface MoveData {
 export const SPECIES = pokemonJson as unknown as Record<string, SpeciesData>;
 export const MOVES = movesJson as unknown as Record<string, MoveData>;
 export const TYPE_CHART = typesJson as Record<string, Record<string, number>>;
+export const ABILITIES = abilitiesJson as unknown as Record<string, AbilityData>;
+
+export function ability(slug: string): AbilityData {
+  return ABILITIES[slug] ?? { slug, name: slug, effect: '' };
+}
+
+export function defaultAbility(speciesId: number): string {
+  const list = SPECIES[String(speciesId)]?.abilities ?? [];
+  return (list.find((a) => !a.hidden) ?? list[0])?.name ?? 'none';
+}
 
 export function species(id: number): SpeciesData {
   const s = SPECIES[String(id)];

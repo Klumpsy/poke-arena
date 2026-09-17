@@ -3,6 +3,9 @@
   import ChallengeModal from './ChallengeModal.svelte';
   import DebtsTab from './DebtsTab.svelte';
   import GymsTab from './GymsTab.svelte';
+  import HistoryTab from './HistoryTab.svelte';
+  import QuestsWidget from './QuestsWidget.svelte';
+  import TournamentTab from './TournamentTab.svelte';
   import Leaderboard from './Leaderboard.svelte';
   import MovePicker from './MovePicker.svelte';
   import PokedexTab from './PokedexTab.svelte';
@@ -17,7 +20,7 @@
   const dirty = $derived(draft.join() !== store.team.join());
   let editing = $state<string | null>(null);
   let challenging = $state<string | null>(null);
-  let tab = $state<'arena' | 'gyms' | 'pokedex' | 'debts'>('arena');
+  let tab = $state<'arena' | 'gyms' | 'pokedex' | 'history' | 'tournament' | 'debts'>('arena');
   const openDebts = $derived(store.debts.filter((d) => !d.done_at && (d.debtor_id === store.me || d.creditor_id === store.me)).length);
   const editingPokemon = $derived(store.pokemon.find((p) => p.id === editing) ?? null);
 
@@ -31,6 +34,8 @@
   <button class:on={tab === 'arena'} onclick={() => (tab = 'arena')}>Arena</button>
   <button class:on={tab === 'gyms'} onclick={() => (tab = 'gyms')}>Gyms</button>
   <button class:on={tab === 'pokedex'} onclick={() => (tab = 'pokedex')}>Pokédex</button>
+  <button class:on={tab === 'history'} onclick={() => (tab = 'history')}>Gevechten{#if store.liveBattles.length} <span class="count live">{store.liveBattles.length}</span>{/if}</button>
+  <button class:on={tab === 'tournament'} onclick={() => (tab = 'tournament')}>Toernooi{#if store.tournament} <span class="count live">●</span>{/if}</button>
   <button class:on={tab === 'debts'} onclick={() => (tab = 'debts')}>Inzetten{#if openDebts} <span class="count">{openDebts}</span>{/if}</button>
 </nav>
 
@@ -38,6 +43,10 @@
   <GymsTab />
 {:else if tab === 'pokedex'}
   <PokedexTab />
+{:else if tab === 'history'}
+  <HistoryTab />
+{:else if tab === 'tournament'}
+  <TournamentTab />
 {:else if tab === 'debts'}
   <DebtsTab />
 {:else}
@@ -64,6 +73,7 @@
   <aside class="grid">
     <OnlineList onChallenge={(id) => (challenging = id)} />
     <Leaderboard />
+    <QuestsWidget />
   </aside>
 </div>
 {/if}
@@ -97,6 +107,7 @@
   .tabs { display: flex; gap: 0.4rem; margin-bottom: 1rem; flex-wrap: wrap; }
   .tabs button.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 700; }
   .count { background: var(--danger); color: #fff; border-radius: 999px; padding: 0 0.4rem; font-size: 0.7rem; }
+  .count.live { background: var(--warning); color: #1a1a1a; }
   .cards { display: grid; gap: 0.75rem; }
   .modal-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); display: grid; place-items: center; z-index: 10; }
   .modal { max-width: 420px; width: calc(100% - 2rem); }

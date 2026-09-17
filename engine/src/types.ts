@@ -3,6 +3,20 @@ export type StatKey = 'hp' | 'atk' | 'def' | 'spa' | 'spd' | 'spe';
 export type StageKey = 'atk' | 'def' | 'spa' | 'spd' | 'spe' | 'acc' | 'eva';
 export type Status = 'none' | 'par' | 'slp' | 'brn' | 'psn' | 'tox' | 'frz';
 export type Gender = 'male' | 'female' | 'genderless';
+export type Weather = 'none' | 'sun' | 'rain' | 'sand' | 'hail';
+export type Terrain = 'none' | 'electric' | 'grassy' | 'psychic' | 'misty';
+
+export interface FieldState {
+  weather: Weather;
+  weatherTurns: number;
+  terrain: Terrain;
+  terrainTurns: number;
+}
+
+export interface BattleOptions {
+  weather?: Weather;
+  terrain?: Terrain;
+}
 
 export type Stats = Record<StatKey, number>;
 export type Stages = Record<StageKey, number>;
@@ -16,6 +30,7 @@ export interface PokemonSnapshot {
   moves: string[];
   shiny: boolean;
   gender: Gender;
+  ability?: string | null;
 }
 
 export interface TeamSnapshot {
@@ -45,8 +60,20 @@ export interface BattlePokemon {
   toxicCounter: number;
   stages: Stages;
   moves: MoveSlot[];
+  ability: string;
   helpingHand: boolean;
   flinched: boolean;
+  protectedNow: boolean;
+  protectStreak: number;
+  charging: { moveIndex: number; slug: string; invulnerable: boolean } | null;
+  damageTakenThisTurn: { amount: number; category: 'physical' | 'special' } | null;
+  movedThisTurn: boolean;
+  leechSeeded: boolean;
+  cursed: boolean;
+  yawnTurns: number;
+  turnsOnField: number;
+  aquaRing: boolean;
+  truantLoaf: boolean;
 }
 
 export interface SideState {
@@ -63,6 +90,7 @@ export interface BattleState {
   phase: Phase;
   sides: Record<Side, SideState>;
   winner: Side | null;
+  field: FieldState;
 }
 
 export type Action = { type: 'move'; moveIndex: number } | { type: 'switch'; slot: number };
@@ -81,4 +109,9 @@ export type BattleEvent =
   | { type: 'statusEffect'; side: Side; name: string; status: Status; text: 'skip' | 'thaw' | 'wake' | 'residual' }
   | { type: 'flinch'; side: Side; name: string }
   | { type: 'faint'; side: Side; name: string }
+  | { type: 'weather'; weather: Weather; text: 'start' | 'end' | 'residual' }
+  | { type: 'terrain'; terrain: Terrain; text: 'start' | 'end' }
+  | { type: 'ability'; side: Side; name: string; ability: string; text: string }
+  | { type: 'protect'; side: Side; name: string }
+  | { type: 'charge'; side: Side; name: string; move: string }
   | { type: 'end'; winner: Side };

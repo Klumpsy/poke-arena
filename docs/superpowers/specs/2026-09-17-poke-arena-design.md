@@ -86,3 +86,10 @@ applyActions(state, actions: Record<Side, Action>): { state, events: BattleEvent
   no heartbeat for 2 minutes and no action for 2 minutes can claim the win; sessions without a player row sign
   out automatically; legacy PokeTokenBar state without profiles is supported.
 - All rules live in Postgres functions (`challenge`, `respond_battle`, `settle_battle`, `claim_gym`, ...).
+
+## v3 (2026-09-17, night)
+
+Battle history + replay + spectating (RLS opened for reads), engine abilities/weather/terrain/special moves,
+two-party finish confirmation (loser's vote settles; disagreement = disputed), Discord via pg_net triggers,
+tournaments (single elimination, seeded, byes), Champion (all 8 badges), titles, weekly quests, profile modal,
+stake templates, sounds, jsDelivr sprite CDN. All rules server-side in migration 0013.
