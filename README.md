@@ -21,14 +21,16 @@ type chart, STAB, crits, accuracy, stat stages and status conditions.
 
 1. Create a project at supabase.com (free tier is fine).
 2. SQL editor: paste and run `supabase/migrations/0001_schema.sql`.
-3. Authentication > Sign In / Providers: enable **Anonymous sign-ins**. Players log in with just a name; the
-   account lives in the browser (localStorage). Email login is not used, so no SMTP setup is needed.
+3. Authentication > Sign In / Providers > Email: enabled, **Confirm email off**. Players log in with a name and
+   a password; the app maps the name to an internal address `<slug>@players.poke-arena`, so no mail is ever
+   sent and no SMTP setup is needed. First login creates the account.
 4. Authentication > URL Configuration: set Site URL to your Pages URL
    (e.g. `https://<user>.github.io/poke-arena/`) and add it to Redirect URLs.
 5. Project Settings > API: copy the project URL and the `anon` key.
 
-Anyone with the URL can join, so share it in a private channel. If email login is ever re-enabled, the SQL
-function `allowed_email_domains()` (default `cube.nl`) still restricts it.
+Anyone with the URL can create an account, so share it in a private channel. Allowed address domains live
+in the SQL function `allowed_email_domains()`. Password reset: an admin sets a new password in the Supabase
+dashboard (Authentication > Users).
 
 ### 2. GitHub Pages
 
@@ -39,8 +41,8 @@ function `allowed_email_domains()` (default `cube.nl`) still restricts it.
 
 ### 3. Colleagues
 
-Open the site, type a name, paste the install command once. Done. A new browser or laptop means a new
-account: type the name again and paste the (new) install command shown on the setup screen.
+Open the site, pick a name and password, paste the install command once. Done. Same name and password
+work from any browser or laptop.
 
 ## Local development
 

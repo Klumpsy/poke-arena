@@ -58,10 +58,25 @@ class ArenaStore {
     this.online = [];
   }
 
-  async signIn(name: string): Promise<void> {
+  async signIn(name: string, password: string): Promise<void> {
     this.error = null;
-    const { error } = await supabase.auth.signInAnonymously({ options: { data: { name } } });
-    if (error) this.error = friendlyAuthError(error.message);
+    const email = playerEmail(name);
+    if (!email) {
+      this.error = 'Gebruik letters of cijfers in je naam.';
+      return;
+    }
+    const login = await supabase.auth.signInWithPassword({ email, password });
+    if (!login.error) return;
+    if (!/Invalid login credentials/i.test(login.error.message)) {
+      this.error = friendlyAuthError(login.error.message);
+      return;
+    }
+    const signup = await supabase.auth.signUp({ email, password, options: { data: { name } } });
+    if (signup.error) {
+      this.error = /already registered/i.test(signup.error.message)
+        ? 'Deze naam bestaat al, maar het wachtwoord klopt niet.'
+        : friendlyAuthError(signup.error.message);
+    }
   }
 
   async rename(name: string): Promise<void> {
@@ -217,9 +232,20 @@ class ArenaStore {
   }
 }
 
+export function playerEmail(name: string): string | null {
+  const slug = name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '.')
+    .replace(/^\.+|\.+$/g, '');
+  return slug.length >= 2 ? `${slug}@players.poke-arena` : null;
+}
+
 function friendlyAuthError(message: string): string {
   if (/Vul een naam in/.test(message)) return 'Vul een naam in van 2 tot 30 tekens.';
-  if (/Database error (saving new|creating anonymous) user/.test(message)) return 'Vul een naam in van 2 tot 30 tekens.';
+  if (/Database error saving new user/.test(message)) return 'Vul een naam in van 2 tot 30 tekens.';
+  if (/Password should be/i.test(message)) return 'Wachtwoord moet minimaal 6 tekens zijn.';
   if (/rate limit/i.test(message)) return 'Even wachten, te veel pogingen achter elkaar.';
   return message;
 }
