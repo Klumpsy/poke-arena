@@ -30,7 +30,8 @@
   let popup = $state<{ side: Side; text: string; cls: string; key: number } | null>(null);
   let fieldShake = $state(false);
   let confirmForfeit = $state(false);
-  let now = $state(Date.now());
+  let abandon = $state<{ claimable: boolean; secondsLeft: number; opponentSeenAgo: number } | null>(null);
+  let gymTaken = $state(false);
 
   const controlsOpen = $derived(Boolean(view && replay && !animating && view.phase !== 'finished' && pendingActors(view).includes(mySide) && !replay.submitted[mySide]));
   const waiting = $derived(Boolean(view && replay && !animating && view.phase !== 'finished' && !controlsOpen));
@@ -39,8 +40,18 @@
   const gym = $derived(battle.gym_id ? store.gyms.find((g) => g.id === battle.gym_id) : null);
   const finishedRow = $derived(store.activeBattle?.id === battle.id ? store.activeBattle : battle);
   const rowFinished = $derived(finishedRow.status === 'finished' && Boolean(view) && view!.phase !== 'finished');
-  const opponentSeen = $derived(store.players.find((p) => p.id === oppId)?.last_seen_at ?? null);
-  const opponentGone = $derived(Boolean(opponentSeen) && now - new Date(opponentSeen!).getTime() > 2 * 60 * 1000);
+  const offeredGym = $derived(finishedRow.gym_offer ? store.gyms.find((g) => g.id === finishedRow.gym_offer) : null);
+  const iWon = $derived(finishedRow.winner_id === me);
+  const myGym = $derived(store.gymOf(me));
+
+  async function checkAbandon() {
+    if (!waiting) {
+      abandon = null;
+      return;
+    }
+    const { data } = await supabase.rpc('abandon_check', { p_battle: battle.id });
+    abandon = (data as typeof abandon) ?? null;
+  }
 
   function effectivenessLabel(slug: string): { text: string; cls: string } | null {
     if (!view) return null;
@@ -53,8 +64,8 @@
 
   async function refresh() {
     try {
-      now = Date.now();
       void store.loadBattles();
+      void supabase.rpc('heartbeat');
       const actions = await fetchActions(battle.id);
       replay = replayBattle(battle, actions);
       if (!view) {
@@ -171,9 +182,11 @@
     void refresh();
     const channel = watchBattle(battle.id, () => void refresh());
     const poll = setInterval(() => void refresh(), 4000);
+    const abandonPoll = setInterval(() => void checkAbandon(), 10000);
     return () => {
       void supabase.removeChannel(channel);
       clearInterval(poll);
+      clearInterval(abandonPoll);
     };
   });
 
@@ -227,20 +240,41 @@
       </div>
 
       <div class="panel controls">
-        {#if rowFinished}
-          <h2 class="pixel" style="font-size: 1rem">{finishedRow.winner_id === me ? 'Gewonnen!' : 'Verloren...'}</h2>
-          <p class="muted">{finishedRow.winner_id === me ? `${store.nameOf(oppId)} heeft opgegeven of is weggegaan.` : 'Je hebt opgegeven.'}</p>
-          <button class="primary" onclick={() => store.leaveBattle()}>Terug naar lobby</button>
-        {:else if finished}
-          <h2 class="pixel" style="font-size: 1rem">{view.winner === mySide ? 'Gewonnen!' : 'Verloren...'}</h2>
+        {#if rowFinished || finished}
+          {@const won = rowFinished ? iWon : view.winner === mySide}
+          <h2 class="pixel" style="font-size: 1rem">{won ? 'Gewonnen!' : 'Verloren...'}</h2>
+          {#if rowFinished}
+            <p class="muted">{won ? `${store.nameOf(oppId)} heeft opgegeven of is weggegaan.` : 'Je hebt opgegeven.'}</p>
+          {/if}
           {#if finishedRow.rating_delta}
-            <p class="muted">Rating {view.winner === mySide ? '+' : '-'}{finishedRow.rating_delta}</p>
+            <p class="muted">Rating {won ? '+' : '-'}{finishedRow.rating_delta}</p>
           {/if}
           {#if gym}
-            <p>{view.winner === mySide ? (mySide === 'a' ? `Badge verdiend, jij bent nu leader van ${gym.name}!` : `Je verdedigt ${gym.name} met succes.`) : (mySide === 'a' ? `Geen badge. Over 24 uur mag je ${gym.name} opnieuw uitdagen.` : `${store.nameOf(oppId)} neemt ${gym.name} over.`)}</p>
+            {#if won && mySide === 'a'}
+              <p>Badge van {gym.name} verdiend! {store.gymOf(me)?.id === gym.id ? 'Jij bent nu de leader.' : `Zonder ${gym.type}-type in je team blijft de gym leeg.`}</p>
+            {:else if won}
+              <p>Je verdedigt {gym.name} met succes.</p>
+            {:else if mySide === 'a'}
+              <p>Geen badge. Over 24 uur mag je {gym.name} opnieuw uitdagen.</p>
+            {:else}
+              <p>{store.nameOf(oppId)} verdient de badge en neemt {gym.name} over.</p>
+            {/if}
+          {:else if won && offeredGym}
+            <p>Je hebt de leader van <strong>{offeredGym.name}</strong> verslagen: badge verdiend!</p>
+            {#if gymTaken}
+              <p class="muted">Jij bent nu leader van {offeredGym.name}.</p>
+            {:else if store.teamHasType(offeredGym.type)}
+              <button class="primary" style="margin-bottom: 0.5rem" onclick={async () => { gymTaken = await store.takeOfferedGym(battle.id); }}>
+                {myGym ? `Wissel van ${myGym.name} naar ${offeredGym.name}` : `Neem ${offeredGym.name} over`}
+              </button>
+            {:else}
+              <p class="muted">Om {offeredGym.name} over te nemen heb je een {offeredGym.type}-type in je team nodig. Pas je team aan en versla de leader nog eens.</p>
+            {/if}
+          {:else if !won && store.gymOf(me) && !gym}
+            <p class="muted">{store.nameOf(oppId)} verdient een badge en mag je gym overnemen.</p>
           {/if}
           {#if battle.stake}
-            <p>Inzet: "{battle.stake}". {view.winner === mySide ? `${store.nameOf(oppId)} is je die verschuldigd.` : 'Die ben jij nu verschuldigd, zie Inzetten.'}</p>
+            <p>Inzet: "{battle.stake}". {won ? `${store.nameOf(oppId)} is je die verschuldigd.` : 'Die ben jij nu verschuldigd, zie Inzetten.'}</p>
           {/if}
           <button class="primary" onclick={() => store.leaveBattle()}>Terug naar lobby</button>
         {:else if controlsOpen && view.phase === 'replace'}
@@ -284,13 +318,16 @@
           {/if}
         {:else if waiting}
           <p class="muted" style="animation: pulse 1.5s infinite">Wacht op {store.nameOf(oppId)}...</p>
-          {#if opponentGone}
-            <p class="error" style="font-size: 0.85rem">{store.nameOf(oppId)} is al 2 minuten niet online.</p>
+          {#if abandon?.claimable}
+            <p class="error" style="font-size: 0.85rem">{store.nameOf(oppId)} is al meer dan 2 minuten weg.</p>
             <button class="primary" onclick={() => store.claimAbandoned(battle.id)}>Claim de overwinning</button>
+          {:else if abandon && abandon.opponentSeenAgo >= 30}
+            <p class="muted" style="font-size: 0.8rem">{store.nameOf(oppId)} lijkt weg ({abandon.opponentSeenAgo}s geen teken van leven). Na 2 minuten stilte mag je de winst claimen, nog {abandon.secondsLeft}s.</p>
           {/if}
         {:else}
           <p class="muted">...</p>
         {/if}
+        {#if store.error}<p class="error" style="font-size: 0.85rem">{store.error} <button class="subtle" onclick={() => (store.error = null)}>ok</button></p>{/if}
         {#if !finished && !rowFinished}
           <div class="forfeit">
             {#if confirmForfeit}

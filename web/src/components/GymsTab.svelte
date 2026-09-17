@@ -27,7 +27,7 @@
     {/if}
   </div>
   <p class="muted" style="margin: 0.25rem 0 1rem">
-    King of the hill: versla de leader in een gym-uitdaging en je krijgt de badge én de gym. Lege gym? De hoogst geplaatste speler zonder gym mag hem claimen. Leader heeft minstens één Pokémon van het gymtype in zijn team.
+    King of the hill. Versla een gymleader (in welk gevecht dan ook) en je verdient de badge. Bij een gym-uitdaging neem je de gym meteen over; bij een gewoon gevecht krijg je na afloop de keuze. Lege gym? De hoogst geplaatste speler zonder gym mag hem claimen. Voor een gym heb je minstens één Pokémon van dat type in je team nodig.
   </p>
   <div class="gyms">
     {#each store.gyms as g (g.id)}

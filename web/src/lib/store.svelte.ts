@@ -1,3 +1,4 @@
+import { species } from '@poke-arena/engine';
 import type { RealtimeChannel, Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import type { BadgeRow, BattleRow, CooldownRow, DebtRow, GymRow, PlayerRow, PokemonRow, PresenceMeta, TeamRow } from './types';
@@ -260,6 +261,21 @@ class ArenaStore {
     const { error } = await supabase.rpc('respond_battle', { p_battle: battleId, p_accept: accept });
     if (error) this.error = error.message;
     await this.loadBattles();
+  }
+
+  async takeOfferedGym(battleId: string): Promise<boolean> {
+    this.error = null;
+    const { error } = await supabase.rpc('take_offered_gym', { p_battle: battleId });
+    if (error) this.error = error.message;
+    await Promise.all([this.loadBattles(), this.loadArena()]);
+    return !error;
+  }
+
+  teamHasType(type: string): boolean {
+    return this.team.some((id) => {
+      const p = this.pokemon.find((k) => k.id === id);
+      return p ? species(p.species_id).types.includes(type) : false;
+    });
   }
 
   async forfeit(battleId: string): Promise<void> {

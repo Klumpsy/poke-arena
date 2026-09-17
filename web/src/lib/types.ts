@@ -52,6 +52,7 @@ export interface BattleRow {
   gym_id: string | null;
   stake: string | null;
   rating_delta: number | null;
+  gym_offer: string | null;
 }
 
 export interface GymRow {

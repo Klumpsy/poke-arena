@@ -11,7 +11,7 @@
       {#each ranked as p, i (p.id)}
         <tr class:me={p.id === store.me}>
           <td class="muted">{i + 1}</td>
-          <td>{p.name}{#if store.gymOf(p.id)} <span class="muted" style="font-size: 0.75rem">leader</span>{/if}</td>
+          <td>{p.name}{#if store.gymOf(p.id)}<span class="badge" style="margin-left: 0.4rem">leader</span>{/if}</td>
           <td>{p.rating}</td>
           <td>{p.wins}</td>
           <td>{p.losses}</td>
