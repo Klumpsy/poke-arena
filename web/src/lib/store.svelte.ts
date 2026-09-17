@@ -39,7 +39,12 @@ class ArenaStore {
   private async bootstrap(): Promise<void> {
     this.teardown();
     if (!this.session) return;
-    await Promise.all([this.loadPlayer(), this.loadPokemon(), this.loadTeam(), this.loadPlayers(), this.loadBattles(), this.loadSyncToken()]);
+    await this.loadPlayer();
+    if (!this.player) {
+      await this.signOut();
+      return;
+    }
+    await Promise.all([this.loadPokemon(), this.loadTeam(), this.loadPlayers(), this.loadBattles(), this.loadSyncToken()]);
     this.subscribe();
     this.pollTimer = setInterval(() => {
       void this.loadPokemon();
@@ -88,7 +93,9 @@ class ArenaStore {
   }
 
   async signOut(): Promise<void> {
+    this.teardown();
     await supabase.auth.signOut();
+    this.session = null;
     this.player = null;
     this.pokemon = [];
     this.team = [];
