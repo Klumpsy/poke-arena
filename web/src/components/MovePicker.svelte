@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { hasDamagingMove, learnableMoves, move as moveData, species } from '@poke-arena/engine';
+  import { defaultMoves, hasDamagingMove, learnableMoves, move as moveData, species } from '@poke-arena/engine';
   import { store } from '../lib/store.svelte';
   import { battleMoves, type PokemonRow } from '../lib/types';
 
@@ -25,7 +25,7 @@
   }
 
   function resetToApp() {
-    chosen = [...pokemon.moves];
+    chosen = pokemon.moves.length ? [...pokemon.moves] : defaultMoves(pokemon.species_id, pokemon.level);
   }
 </script>
 

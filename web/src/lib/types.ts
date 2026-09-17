@@ -1,4 +1,4 @@
-import type { Action, Side, Stats, TeamSnapshot } from '@poke-arena/engine';
+import { defaultMoves, type Action, type Side, type Stats, type TeamSnapshot } from '@poke-arena/engine';
 
 export interface PlayerRow {
   id: string;
@@ -25,7 +25,8 @@ export interface PokemonRow {
 }
 
 export function battleMoves(p: PokemonRow): string[] {
-  return p.custom_moves?.length ? p.custom_moves : p.moves;
+  if (p.custom_moves?.length) return p.custom_moves;
+  return p.moves.length ? p.moves : defaultMoves(p.species_id, p.level);
 }
 
 export interface TeamRow {

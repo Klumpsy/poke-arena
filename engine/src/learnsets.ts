@@ -19,3 +19,12 @@ export function learnableMoves(speciesId: number, level: number, current: string
 export function hasDamagingMove(moves: string[]): boolean {
   return moves.some((slug) => MOVES[slug] && MOVES[slug].category !== 'status' && (MOVES[slug].power ?? 0) > 0);
 }
+
+export function defaultMoves(speciesId: number, level: number): string[] {
+  const learnable = learnableMoves(speciesId, level);
+  const damaging = learnable.filter((m) => MOVES[m.slug].category !== 'status' && (MOVES[m.slug].power ?? 0) > 0);
+  const picked: string[] = [];
+  for (const m of [...damaging].reverse()) if (picked.length < 3 && !picked.includes(m.slug)) picked.push(m.slug);
+  for (const m of [...learnable].reverse()) if (picked.length < 4 && !picked.includes(m.slug)) picked.push(m.slug);
+  return picked.length ? picked : ['tackle'];
+}

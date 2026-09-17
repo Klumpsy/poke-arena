@@ -1,4 +1,5 @@
 import { move as moveData, species, typeEffectiveness, type MoveData } from './data';
+import { defaultMoves } from './learnsets';
 import { Rng, seedRng } from './rng';
 import { accuracyMultiplier, computeStats, isStageKey, stageMultiplier } from './stats';
 import type {
@@ -40,7 +41,7 @@ export function other(side: Side): Side {
 function buildPokemon(p: PokemonSnapshot): BattlePokemon {
   const sp = species(p.speciesId);
   const stats = computeStats(p);
-  const moves = (p.moves.length ? p.moves : [STRUGGLE]).slice(0, 4).map((slug) => {
+  const moves = (p.moves.length ? p.moves : defaultMoves(p.speciesId, p.level)).slice(0, 4).map((slug) => {
     const pp = moveData(slug).pp ?? 10;
     return { slug, pp, maxPp: pp };
   });
