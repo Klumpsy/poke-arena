@@ -178,7 +178,7 @@ class ArenaStore {
       supabase.from('gym_cooldowns').select('*').gt('until', new Date().toISOString()),
       supabase.from('debts').select('*').order('created_at', { ascending: false }).limit(100),
       supabase.from('pokemon').select('*').order('level', { ascending: false }),
-      supabase.rpc('next_claimant'),
+      Promise.resolve({ data: null }),
       supabase.rpc('busy_players'),
     ]);
     this.busy = ((busy.data as string[] | null) ?? []).map(String);

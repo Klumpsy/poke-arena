@@ -5,7 +5,7 @@
 
   let challenging = $state<{ opponentId: string; gymId: string } | null>(null);
   const myGym = $derived(store.gymOf(store.me!));
-  const iAmNext = $derived(store.nextClaimant === store.me);
+  const canClaim = $derived(!store.gymOf(store.me!) && store.team.length > 0);
   const myBadges = $derived(store.badgesOf(store.me!));
 
   function online(id: string) {
@@ -20,14 +20,14 @@
     {#if myGym}
       <span class="muted">Jij leidt {myGym.name}</span>
       <button class="danger" onclick={() => store.releaseGym()}>Gym opgeven</button>
-    {:else if iAmNext}
-      <span class="badge active">Jij mag een lege gym claimen</span>
-    {:else if store.nextClaimant}
-      <span class="muted">Aan de beurt om te claimen: {store.nameOf(store.nextClaimant)}</span>
+    {:else if canClaim}
+      <span class="badge active">Lege gym? Claim hem, wie het eerst komt...</span>
+    {:else}
+      <span class="muted">Sla eerst een team op om een gym te claimen</span>
     {/if}
   </div>
   <p class="muted" style="margin: 0.25rem 0 1rem">
-    King of the hill. Versla een gymleader (in welk gevecht dan ook) en je verdient de badge. Bij een gym-uitdaging neem je de gym meteen over; bij een gewoon gevecht krijg je na afloop de keuze. Lege gym? De hoogst geplaatste speler zonder gym mag hem claimen. Voor een gym heb je minstens één Pokémon van dat type in je team nodig.
+    Lege gym? Wie het eerst komt, het eerst maalt (één gym per persoon, minstens één Pokémon van dat type in je team). Daarna: versla de leader in een gym-uitdaging en je neemt de gym over, plus de badge. Versla je een leader in een gewoon gevecht, dan verdien je ook de badge en krijg je na afloop de keuze om de gym over te nemen.
   </p>
   <div class="gyms">
     {#each store.gyms as g (g.id)}
@@ -51,8 +51,12 @@
           {/if}
         </div>
         <div class="row" style="margin-top: 0.5rem">
-          {#if !g.leader_id && iAmNext}
-            <button class="primary" onclick={() => store.claimGym(g.id)}>Claim deze gym</button>
+          {#if !g.leader_id && canClaim}
+            {#if store.teamHasType(g.type)}
+              <button class="primary" onclick={() => store.claimGym(g.id)}>Claim deze gym</button>
+            {:else}
+              <span class="muted" style="font-size: 0.8rem">Je hebt geen {g.type}-type in je team</span>
+            {/if}
           {:else if g.leader_id && !mine}
             {#if cooldown}
               <span class="muted" style="font-size: 0.8rem">Opnieuw vanaf {new Date(cooldown.until).toLocaleString('nl-NL', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</span>
