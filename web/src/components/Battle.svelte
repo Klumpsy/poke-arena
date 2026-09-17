@@ -39,7 +39,7 @@
       if (!view) {
         view = replay.turns.length ? replay.states[replay.turns.length - 1] : replay.state;
         playedTurns = replay.turns.length;
-        if (playedTurns) log = replay.turns.flat().map(describe);
+        if (playedTurns) log = replay.turns.flat().filter((e) => e.type !== 'end').map(describe);
       }
       void animateNewTurns();
     } catch (e) {
@@ -56,7 +56,7 @@
     while (replay && playedTurns < replay.turns.length) {
       const events = replay.turns[playedTurns];
       for (const e of events) {
-        log = [...log, describe(e)];
+        if (e.type !== 'end') log = [...log, describe(e)];
         applyEventToView(e);
         await sleep(DELAY[e.type] ?? 650);
       }
