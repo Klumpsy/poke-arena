@@ -264,9 +264,10 @@ function executeMove(state: BattleState, side: Side, mv: MoveData, action: Actio
   for (let i = 0; i < hits; i++) {
     if (target.hp <= 0) break;
     const { damage, crit } = computeDamage(user, target, mv, effectiveness, rng);
-    target.hp = Math.max(0, target.hp - damage);
-    totalDamage += damage;
-    events.push({ type: 'damage', side: targetSide, name: target.name, amount: damage, hp: target.hp, maxHp: target.maxHp, effectiveness, crit });
+    const dealt = Math.min(damage, target.hp);
+    target.hp -= dealt;
+    totalDamage += dealt;
+    events.push({ type: 'damage', side: targetSide, name: target.name, amount: dealt, hp: target.hp, maxHp: target.maxHp, effectiveness, crit });
   }
   user.helpingHand = false;
 

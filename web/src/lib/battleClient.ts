@@ -46,7 +46,7 @@ export async function submitAction(battleId: string, turn: number, playerId: str
 
 export function watchBattle(battleId: string, onChange: () => void): RealtimeChannel {
   return supabase
-    .channel(`battle-${battleId}`)
+    .channel(`battle-${battleId}-${Date.now()}`)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'battle_actions', filter: `battle_id=eq.${battleId}` }, onChange)
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'battles', filter: `id=eq.${battleId}` }, onChange)
     .subscribe();

@@ -55,7 +55,8 @@ RESPONSE="$(curl -sS --fail-with-body --max-time 30 \
   exit 1
 }
 echo "$(date '+%F %T') ok $RESPONSE" >> "$HOME/.poke-arena/sync.log"
-tail -n 200 "$HOME/.poke-arena/sync.log" > "$HOME/.poke-arena/sync.log.tmp" && mv "$HOME/.poke-arena/sync.log.tmp" "$HOME/.poke-arena/sync.log"
+LOG_TMP="$(mktemp)"
+tail -n 200 "$HOME/.poke-arena/sync.log" > "$LOG_TMP" && mv "$LOG_TMP" "$HOME/.poke-arena/sync.log"
 SYNC
 chmod 700 "$APP_DIR/sync.sh"
 

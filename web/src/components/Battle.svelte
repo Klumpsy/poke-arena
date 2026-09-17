@@ -2,6 +2,7 @@
   import { describe, legalActions, move as moveData, other, pendingActors, type Action, type BattleEvent, type BattleState, type Side } from '@poke-arena/engine';
   import { onMount } from 'svelte';
   import { fetchActions, replayBattle, submitAction, watchBattle, type ReplayResult } from '../lib/battleClient';
+  import { supabase } from '../lib/supabase';
   import { animatedSprite, staticSprite } from '../lib/sprites';
   import { store } from '../lib/store.svelte';
   import { sideOf, type BattleRow } from '../lib/types';
@@ -123,7 +124,7 @@
     const channel = watchBattle(battle.id, () => void refresh());
     const poll = setInterval(() => void refresh(), 4000);
     return () => {
-      channel.unsubscribe();
+      void supabase.removeChannel(channel);
       clearInterval(poll);
     };
   });

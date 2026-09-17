@@ -190,6 +190,18 @@ describe('KO, replace and win', () => {
     expect(pendingActors(r.state)).toEqual([]);
   });
 
+  it('caps dealt damage at remaining HP so recoil is based on real damage', () => {
+    const bird = mon(398, ['brave-bird'], { level: 100 });
+    const s = createBattle(team(bird), team(weak), 4);
+    const r = run(s, 0, 0);
+    const hit = r.events.find((e) => e.type === 'damage' && e.side === 'b');
+    const recoil = r.events.find((e) => e.type === 'damage' && e.side === 'a');
+    if (hit?.type !== 'damage' || recoil?.type !== 'damage') throw new Error();
+    expect(hit.amount).toBe(hit.amount + hit.hp);
+    expect(recoil.amount).toBe(Math.max(1, Math.floor((hit.amount * 33) / 100)));
+    expect(r.state.sides.a.team[0].hp).toBeGreaterThan(250);
+  });
+
   it('falls back to struggle when out of PP', () => {
     const s = createBattle(team(mon(143, ['tackle'])), team(mon(143, ['tackle'])), 9);
     s.sides.a.team[0].moves[0].pp = 0;

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { store } from '../lib/store.svelte';
   import Leaderboard from './Leaderboard.svelte';
+  import MovePicker from './MovePicker.svelte';
   import OnlineList from './OnlineList.svelte';
   import PokemonCard from './PokemonCard.svelte';
 
@@ -10,6 +11,8 @@
   });
 
   const dirty = $derived(draft.join() !== store.team.join());
+  let editing = $state<string | null>(null);
+  const editingPokemon = $derived(store.pokemon.find((p) => p.id === editing) ?? null);
 
   function toggle(id: string) {
     if (draft.includes(id)) draft = draft.filter((x) => x !== id);
@@ -30,7 +33,7 @@
     {/if}
     <div class="cards">
       {#each store.pokemon as p (p.id)}
-        <PokemonCard pokemon={p} selected={draft.includes(p.id)} order={draft.indexOf(p.id) + 1} onclick={() => toggle(p.id)} />
+        <PokemonCard pokemon={p} selected={draft.includes(p.id)} order={draft.indexOf(p.id) + 1} onclick={() => toggle(p.id)} onEditMoves={() => (editing = p.id)} />
       {/each}
     </div>
     <p class="muted" style="font-size: 0.8rem; margin-top: 0.75rem">
@@ -42,6 +45,10 @@
     <Leaderboard />
   </aside>
 </div>
+
+{#if editingPokemon}
+  <MovePicker pokemon={editingPokemon} onclose={() => (editing = null)} />
+{/if}
 
 {#if store.incoming.length}
   {@const invite = store.incoming[0]}

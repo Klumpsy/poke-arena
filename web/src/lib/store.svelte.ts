@@ -14,7 +14,6 @@ class ArenaStore {
   incoming = $state<BattleRow[]>([]);
   outgoing = $state<BattleRow | null>(null);
   activeBattle = $state<BattleRow | null>(null);
-  lastFinished = $state<BattleRow | null>(null);
   error = $state<string | null>(null);
 
   private lobby: RealtimeChannel | null = null;
@@ -50,8 +49,8 @@ class ArenaStore {
   }
 
   private teardown(): void {
-    this.lobby?.unsubscribe();
-    this.battlesChannel?.unsubscribe();
+    if (this.lobby) void supabase.removeChannel(this.lobby);
+    if (this.battlesChannel) void supabase.removeChannel(this.battlesChannel);
     this.lobby = null;
     this.battlesChannel = null;
     if (this.pollTimer) clearInterval(this.pollTimer);
@@ -100,6 +99,13 @@ class ArenaStore {
     if (this.team.length) this.team = this.team.filter((id) => this.pokemon.some((p) => p.id === id));
   }
 
+  async setMoves(pokemonId: string, moves: string[]): Promise<void> {
+    this.error = null;
+    const { error } = await supabase.rpc('set_moves', { p_pokemon: pokemonId, p_moves: moves });
+    if (error) this.error = error.message;
+    else this.pokemon = this.pokemon.map((p) => (p.id === pokemonId ? { ...p, custom_moves: moves } : p));
+  }
+
   async loadTeam(): Promise<void> {
     if (!this.me) return;
     const { data } = await supabase.from('teams').select('*').eq('player_id', this.me).maybeSingle();
@@ -130,7 +136,9 @@ class ArenaStore {
       .order('created_at', { ascending: false })
       .limit(30);
     const rows = (data as BattleRow[] | null) ?? [];
-    this.activeBattle = rows.find((b) => b.status === 'active') ?? null;
+    const active = rows.find((b) => b.status === 'active') ?? null;
+    const current = this.activeBattle ? rows.find((b) => b.id === this.activeBattle!.id) : null;
+    this.activeBattle = active ?? (current?.status === 'finished' ? current : null);
     this.incoming = rows.filter((b) => b.status === 'pending' && b.opponent_id === this.me);
     const out = rows.find((b) => b.status === 'pending' && b.challenger_id === this.me) ?? null;
     const declined = rows.find((b) => b.status === 'declined' && b.challenger_id === this.me && this.outgoing?.id === b.id);
@@ -174,9 +182,9 @@ class ArenaStore {
   }
 
   leaveBattle(): void {
-    this.lastFinished = this.activeBattle;
     this.activeBattle = null;
     void this.loadBattles();
+    void this.trackPresence();
   }
 
   private subscribe(): void {
@@ -192,7 +200,7 @@ class ArenaStore {
       });
 
     this.battlesChannel = supabase
-      .channel('my-battles')
+      .channel(`my-battles-${Date.now()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'battles', filter: `opponent_id=eq.${this.me}` }, () => void this.loadBattles())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'battles', filter: `challenger_id=eq.${this.me}` }, () => void this.loadBattles())
       .subscribe();

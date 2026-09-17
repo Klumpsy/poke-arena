@@ -17,10 +17,15 @@ export interface PokemonRow {
   nature: string;
   ivs: Stats;
   moves: string[];
+  custom_moves: string[] | null;
   shiny: boolean;
   gender: 'male' | 'female' | 'genderless';
   is_active: boolean;
   updated_at: string;
+}
+
+export function battleMoves(p: PokemonRow): string[] {
+  return p.custom_moves?.length ? p.custom_moves : p.moves;
 }
 
 export interface TeamRow {
